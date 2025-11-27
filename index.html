@@ -24,12 +24,13 @@
             theme: {
                 extend: {
                     colors: {
-                        'board-bg': '#dcfce7',
-                        'tile-bg': '#ffffff',
+                        'glass-white': 'rgba(255, 255, 255, 0.7)',
+                        'glass-dark': 'rgba(15, 23, 42, 0.6)',
+                        'brand-green': '#10b981',
+                        'brand-blue': '#3b82f6',
                     },
-                    boxShadow: {
-                        'tile': '0 2px 4px rgba(0,0,0,0.1)',
-                        'inner-border': 'inset 0 0 0 1px rgba(0,0,0,0.2)',
+                    backdropBlur: {
+                        'xs': '2px',
                     }
                 }
             }
@@ -37,722 +38,526 @@
     </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fredoka:wght@500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
         
         body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #f0fdf4; 
+            font-family: 'Nunito', sans-serif; 
+            background: linear-gradient(135deg, #dcfce7 0%, #dbeafe 100%);
             overflow: hidden; 
             touch-action: manipulation;
             overscroll-behavior: none;
         }
         
-        h1, h2, h3, .brand-font { font-family: 'Fredoka', sans-serif; }
-
-        .animate-pop { animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes pop {
-            0% { transform: scale(0.95); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
         }
 
-        .pattern-bg {
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 20px 20px;
+        .modal-enter { animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes modalPop {
+            0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
         }
+
+        .tile-shadow { box-shadow: inset 0 0 20px rgba(0,0,0,0.03); }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useReducer, useRef, useCallback } = React;
+        const { useState, useEffect, useReducer, useRef } = React;
 
-        // --- 1. CONSTANTS & DATA ---
-        const TileType = {
-            PROPERTY: 'PROPERTY',
-            START: 'START',
-            CHANCE: 'CHANCE',
-            JAIL: 'JAIL',
-            TAX: 'TAX',
-            PARKING: 'PARKING'
-        };
+        // --- 1. CONSTANTS ---
+        const TileType = { PROPERTY: 'PROPERTY', START: 'START', CHANCE: 'CHANCE', JAIL: 'JAIL', TAX: 'TAX', PARKING: 'PARKING' };
 
         const INITIAL_TILES = [
             { id: 0, name: 'GO', type: TileType.START, description: 'Collect $200' },
-            { id: 1, name: 'Solar Field', type: TileType.PROPERTY, price: 60, rent: 2, group: 'brown' },
-            { id: 2, name: 'Community Chest', type: TileType.CHANCE },
-            { id: 3, name: 'Wind Farm', type: TileType.PROPERTY, price: 60, rent: 4, group: 'brown' },
-            { id: 4, name: 'Carbon Tax', type: TileType.TAX, price: 100, description: 'Pay $100' },
-            { id: 5, name: 'Hydro Plant', type: TileType.PROPERTY, price: 100, rent: 6, group: 'light_blue' }, 
-            { id: 6, name: 'Recycling Ctr', type: TileType.PROPERTY, price: 100, rent: 6, group: 'light_blue' },
-            { id: 7, name: 'Bio Lab', type: TileType.PROPERTY, price: 120, rent: 8, group: 'light_blue' },
-            { id: 8, name: 'Eco Prison', type: TileType.JAIL, description: 'Just Visiting' },
-            { id: 9, name: 'Urban Garden', type: TileType.PROPERTY, price: 140, rent: 10, group: 'pink' },
-            { id: 10, name: 'Green School', type: TileType.PROPERTY, price: 140, rent: 10, group: 'pink' }, 
-            { id: 11, name: 'Eco Uni', type: TileType.PROPERTY, price: 160, rent: 12, group: 'pink' },
-            { id: 12, name: 'Public Park', type: TileType.PARKING, description: 'Free Resting' },
-            { id: 13, name: 'Electric Bus', type: TileType.PROPERTY, price: 180, rent: 14, group: 'orange' },
+            { id: 1, name: 'Solar Farm', type: TileType.PROPERTY, price: 60, rent: 10, group: 'brown' },
+            { id: 2, name: 'Chance', type: TileType.CHANCE },
+            { id: 3, name: 'Wind Turbine', type: TileType.PROPERTY, price: 60, rent: 15, group: 'brown' },
+            { id: 4, name: 'Eco Tax', type: TileType.TAX, price: 100, description: 'Pay $100' },
+            { id: 5, name: 'Hydro Dam', type: TileType.PROPERTY, price: 100, rent: 20, group: 'light_blue' }, 
+            { id: 6, name: 'Recycle Hub', type: TileType.PROPERTY, price: 100, rent: 20, group: 'light_blue' },
+            { id: 7, name: 'Bio Lab', type: TileType.PROPERTY, price: 120, rent: 25, group: 'light_blue' },
+            { id: 8, name: 'Jail', type: TileType.JAIL, description: 'Visit Only' },
+            { id: 9, name: 'Comm. Garden', type: TileType.PROPERTY, price: 140, rent: 30, group: 'pink' },
+            { id: 10, name: 'Tesla Stn', type: TileType.PROPERTY, price: 140, rent: 30, group: 'pink' }, 
+            { id: 11, name: 'Green Uni', type: TileType.PROPERTY, price: 160, rent: 35, group: 'pink' },
+            { id: 12, name: 'Free Park', type: TileType.PARKING, description: 'Relax' },
+            { id: 13, name: 'E-Bus Depot', type: TileType.PROPERTY, price: 180, rent: 40, group: 'orange' },
             { id: 14, name: 'Chance', type: TileType.CHANCE },
-            { id: 15, name: 'Metro Line', type: TileType.PROPERTY, price: 200, rent: 16, group: 'orange' }, 
-            { id: 16, name: 'Forest Reserve', type: TileType.PROPERTY, price: 220, rent: 18, group: 'red' },
-            { id: 17, name: 'Ocean Cleanup', type: TileType.PROPERTY, price: 220, rent: 18, group: 'red' },
-            { id: 18, name: 'Clean Water', type: TileType.PROPERTY, price: 240, rent: 20, group: 'red' },
-            { id: 19, name: 'Global Summit', type: TileType.PROPERTY, price: 350, rent: 35, group: 'blue' },
+            { id: 15, name: 'Metro', type: TileType.PROPERTY, price: 200, rent: 45, group: 'orange' }, 
+            { id: 16, name: 'Forest', type: TileType.PROPERTY, price: 220, rent: 50, group: 'red' },
+            { id: 17, name: 'Ocean Cleaner', type: TileType.PROPERTY, price: 220, rent: 50, group: 'red' },
+            { id: 18, name: 'Pure Water', type: TileType.PROPERTY, price: 240, rent: 60, group: 'red' },
+            { id: 19, name: 'Climate Summit', type: TileType.PROPERTY, price: 350, rent: 100, group: 'blue' },
         ];
 
         const SDG_QUESTIONS = [
-            { id: 1, question: "SDG 1 aims to end what?", options: ["Poverty", "Hunger", "War", "Disease"], correctIndex: 0 },
-            { id: 2, question: "SDG 13 is about...", options: ["Water", "Education", "Climate Action", "Economy"], correctIndex: 2 },
-            { id: 3, question: "SDG 5 promotes...", options: ["Clean Energy", "Gender Equality", "Industry", "Life on Land"], correctIndex: 1 },
-            { id: 4, question: "SDG 7 ensures access to...", options: ["Internet", "Clean Energy", "Housing", "Transport"], correctIndex: 1 },
-            { id: 5, question: "SDG 14 protects...", options: ["Forests", "Deserts", "Life Below Water", "Mountains"], correctIndex: 2 },
-            { id: 6, question: "SDG 4 is Quality...", options: ["Food", "Education", "Water", "Air"], correctIndex: 1 },
-            { id: 7, question: "SDG 11 makes cities...", options: ["Sustainable", "Bigger", "Industrial", "Private"], correctIndex: 0 },
+            { q: "SDG 1 aims to end what?", a: ["Poverty", "Hunger", "War", "Disease"], correct: 0 },
+            { q: "SDG 13 focuses on...", a: ["Water", "Education", "Climate Action", "Economy"], correct: 2 },
+            { q: "Which energy is renewable?", a: ["Coal", "Solar", "Oil", "Gas"], correct: 1 },
+            { q: "SDG 14 protects...", a: ["Forests", "Space", "Life Below Water", "Cities"], correct: 2 },
+            { q: "Reuse, Reduce, ...", a: ["Rebound", "Recycle", "Reject", "Remake"], correct: 1 },
         ];
 
-        const PLAYER_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'];
+        const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b']; // Red, Blue, Green, Yellow
 
-        // --- 2. ICONS ---
-        const Icons = {
-            Dice: ({ val }) => {
-                const dots = {
-                    1: [[50,50]],
-                    2: [[25,25], [75,75]],
-                    3: [[25,25], [50,50], [75,75]],
-                    4: [[25,25], [25,75], [75,25], [75,75]],
-                    5: [[25,25], [25,75], [50,50], [75,25], [75,75]],
-                    6: [[25,25], [25,50], [25,75], [75,25], [75,50], [75,75]]
-                };
-                return (
-                    <svg width="100%" height="100%" viewBox="0 0 100 100" className="bg-white rounded-lg border border-slate-700 shadow-sm">
-                        {dots[val]?.map(([cx, cy], i) => <circle key={i} cx={cx} cy={cy} r="10" fill="#1e293b" />)}
-                    </svg>
-                );
-            },
-        };
-
-        // --- 3. GAME LOGIC ---
+        // --- 2. GAME ENGINE ---
         const initialState = {
             players: [],
             currentPlayerIndex: 0,
             tiles: INITIAL_TILES,
-            gameStatus: 'LOBBY',
-            logs: ['Welcome to EcoPoly!'],
-            dice: [1, 1],
-            winner: null
+            gameStatus: 'LOBBY', // LOBBY, PLAYING, GAME_OVER
+            logs: [],
+            dice: [1, 1]
         };
 
-        const gameReducer = (state, action) => {
+        const reducer = (state, action) => {
             switch (action.type) {
-                case 'JOIN_GAME': {
+                case 'FULL_SYNC': return action.payload; // Client simply replaces state
+                case 'ADD_PLAYER':
                     if (state.players.find(p => p.peerId === action.payload.peerId)) return state;
-                    const newPlayer = { ...action.payload, color: PLAYER_COLORS[state.players.length % 4] };
                     return {
                         ...state,
-                        players: [...state.players, newPlayer],
-                        logs: [`${newPlayer.name} joined.`, ...state.logs],
+                        players: [...state.players, { ...action.payload, color: COLORS[state.players.length % 4], money: 1500, position: 0, properties: [] }],
+                        logs: [`${action.payload.name} joined!`, ...state.logs]
                     };
-                }
-                case 'RESET_GAME': {
-                    return {
-                        ...initialState,
-                        gameStatus: 'PLAYING',
-                        players: state.players.map(p => ({
-                            ...p, money: 1500, position: 0, isJailed: false, properties: []
-                        })),
-                        logs: ['Game started!'],
-                    };
-                }
-                case 'SYNC_STATE': return action.payload;
+                case 'START_GAME':
+                    return { ...state, gameStatus: 'PLAYING', logs: ['Game Started! GLHF!', ...state.logs] };
                 case 'ROLL_DICE': {
                     const pIndex = state.currentPlayerIndex;
                     const player = state.players[pIndex];
                     const d1 = Math.ceil(Math.random() * 6);
                     const d2 = Math.ceil(Math.random() * 6);
-                    const total = d1 + d2;
-                    let newLogs = [...state.logs];
+                    const move = d1 + d2;
+                    let newPos = (player.position + move) % 20;
                     let money = player.money;
-                    
-                    let newPos = (player.position + total) % 20;
+                    let logs = [...state.logs];
+
                     if (newPos < player.position) {
                         money += 200;
-                        newLogs.unshift(`${player.name} passed GO! +$200`);
+                        logs.unshift(`${player.name} passed GO! +$200`);
                     }
 
-                    const landedTile = state.tiles[newPos];
-                    if (landedTile.type === TileType.TAX) {
-                        money -= landedTile.price;
-                        newLogs.unshift(`${player.name} paid Tax $${landedTile.price}`);
+                    // Simple instant effects
+                    const tile = state.tiles[newPos];
+                    if (tile.type === TileType.TAX) {
+                        money -= tile.price;
+                        logs.unshift(`${player.name} paid Tax $${tile.price}`);
                     }
-                    if (landedTile.type === TileType.CHANCE) {
-                        if (Math.random() > 0.5) { money += 50; newLogs.unshift("Chance: Grant +$50"); }
-                        else { money -= 30; newLogs.unshift("Chance: Fine -$30"); }
-                    }
-
-                    return {
-                        ...state,
-                        dice: [d1, d2],
-                        players: state.players.map((p, i) => i === pIndex ? { ...p, position: newPos, money } : p),
-                        logs: [`${player.name} rolled ${total}.`, ...newLogs]
-                    };
-                }
-                case 'BUY_PROPERTY': {
-                    const player = state.players[state.currentPlayerIndex];
-                    const { tileId } = action.payload;
-                    const tile = state.tiles[tileId];
-                    if (player.money >= tile.price) {
-                        return {
-                            ...state,
-                            players: state.players.map((p, i) => i === state.currentPlayerIndex ? { ...p, money: p.money - tile.price, properties: [...p.properties, tileId] } : p),
-                            tiles: state.tiles.map(t => t.id === tileId ? { ...t, ownerId: player.peerId } : t),
-                            logs: [`${player.name} bought ${tile.name}.`, ...state.logs]
-                        }
-                    }
-                    return state;
-                }
-                case 'PAY_RENT': {
-                    const { amount, to } = action.payload;
-                    const payer = state.players[state.currentPlayerIndex];
-                    const receiver = state.players.find(p => p.peerId === to);
-                    
-                    if (payer.money < amount) {
-                        return { ...state, gameStatus: 'GAME_OVER', winner: receiver.name, logs: [`${payer.name} bankrupt!`, ...state.logs] };
+                    if (tile.type === TileType.CHANCE) {
+                        const luck = Math.random();
+                        if (luck > 0.5) { money += 50; logs.unshift("Chance: Eco Subsidy +$50"); }
+                        else { money -= 30; logs.unshift("Chance: Carbon Fee -$30"); }
                     }
 
-                    return {
-                        ...state,
-                        players: state.players.map(p => {
-                            if (p.peerId === payer.peerId) return { ...p, money: p.money - amount };
-                            if (p.peerId === to) return { ...p, money: p.money + amount };
-                            return p;
-                        }),
-                        logs: [`${payer.name} paid rent $${amount} to ${receiver.name}.`, ...state.logs]
-                    };
+                    const newPlayers = state.players.map((p, i) => i === pIndex ? { ...p, position: newPos, money } : p);
+                    return { ...state, dice: [d1, d2], players: newPlayers, logs: [`${player.name} rolled ${move}`, ...logs] };
                 }
                 case 'END_TURN':
                     return { ...state, currentPlayerIndex: (state.currentPlayerIndex + 1) % state.players.length };
+                case 'BUY_TILE': {
+                    const { playerId, tileId } = action.payload;
+                    const player = state.players.find(p => p.peerId === playerId);
+                    const tile = state.tiles[tileId];
+                    if (player.money < tile.price) return state;
+                    
+                    const updatedPlayers = state.players.map(p => p.peerId === playerId ? { ...p, money: p.money - tile.price, properties: [...p.properties, tileId] } : p);
+                    const updatedTiles = state.tiles.map(t => t.id === tileId ? { ...t, ownerId: playerId } : t);
+                    return { ...state, players: updatedPlayers, tiles: updatedTiles, logs: [`${player.name} bought ${tile.name}`, ...state.logs] };
+                }
+                case 'PAY_RENT': {
+                    const { fromId, toId, amount } = action.payload;
+                    return {
+                        ...state,
+                        players: state.players.map(p => {
+                            if (p.peerId === fromId) return { ...p, money: p.money - amount };
+                            if (p.peerId === toId) return { ...p, money: p.money + amount };
+                            return p;
+                        }),
+                        logs: [`Rent paid: $${amount}`, ...state.logs]
+                    };
+                }
                 default: return state;
             }
         };
 
-        // --- 4. COMPONENTS ---
+        // --- 3. COMPONENTS ---
 
-        const ModalManager = ({ modal, onClose, onAction }) => {
-            if (!modal) return null;
-            return (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-pop">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border-4 border-slate-800">
-                        <div className={`${modal.type === 'QUIZ' ? 'bg-blue-600' : modal.type === 'RENT' ? 'bg-red-500' : 'bg-green-600'} p-3 text-white flex items-center justify-center relative`}>
-                            <h3 className="font-bold text-lg brand-font tracking-wide">{modal.title}</h3>
+        const IconDice = ({ val }) => (
+            <svg viewBox="0 0 100 100" className="w-full h-full bg-white rounded-xl shadow-inner border border-slate-200">
+                {val === 1 && <circle cx="50" cy="50" r="12" fill="#333"/>}
+                {val === 2 && <><circle cx="30" cy="30" r="12" fill="#333"/><circle cx="70" cy="70" r="12" fill="#333"/></>}
+                {val === 3 && <><circle cx="25" cy="25" r="12" fill="#333"/><circle cx="50" cy="50" r="12" fill="#333"/><circle cx="75" cy="75" r="12" fill="#333"/></>}
+                {val === 4 && <><circle cx="30" cy="30" r="12" fill="#333"/><circle cx="70" cy="30" r="12" fill="#333"/><circle cx="30" cy="70" r="12" fill="#333"/><circle cx="70" cy="70" r="12" fill="#333"/></>}
+                {val === 5 && <><circle cx="30" cy="30" r="12" fill="#333"/><circle cx="70" cy="30" r="12" fill="#333"/><circle cx="50" cy="50" r="12" fill="#333"/><circle cx="30" cy="70" r="12" fill="#333"/><circle cx="70" cy="70" r="12" fill="#333"/></>}
+                {val === 6 && <><circle cx="30" cy="20" r="10" fill="#333"/><circle cx="70" cy="20" r="10" fill="#333"/><circle cx="30" cy="50" r="10" fill="#333"/><circle cx="70" cy="50" r="10" fill="#333"/><circle cx="30" cy="80" r="10" fill="#333"/><circle cx="70" cy="80" r="10" fill="#333"/></>}
+            </svg>
+        );
+
+        const Modal = ({ title, children, onClose, color = "bg-brand-blue" }) => (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                <div className="glass-panel w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl modal-enter">
+                    <div className={`${color} p-4 text-white text-center font-bold text-lg tracking-wide`}>{title}</div>
+                    <div className="p-6">{children}</div>
+                </div>
+            </div>
+        );
+
+        const Instructions = ({ onClose }) => (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+                <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl modal-enter">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
+                        <h2 className="text-3xl font-extrabold">Welcome to EcoPoly! 🌱</h2>
+                        <p className="opacity-90 mt-1">Sustainability meets Strategy.</p>
+                    </div>
+                    <div className="p-6 space-y-4 text-slate-700 leading-relaxed max-h-[60vh] overflow-y-auto">
+                        <p><strong>Goal:</strong> Be the wealthiest player while promoting Sustainable Development Goals (SDGs). Bankrupt players are out.</p>
+                        <ul className="list-disc pl-5 space-y-2">
+                            <li><strong>Roll & Move:</strong> Navigate the board to find eco-projects.</li>
+                            <li><strong>Buy Properties:</strong> Land on unowned tiles? Answer an <em>SDG Quiz</em> to buy them!</li>
+                            <li><strong>Pay Rent:</strong> Landing on opponent's tiles costs money.</li>
+                            <li><strong>Corners:</strong> Watch out for Eco Tax and Jail!</li>
+                        </ul>
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
+                            <strong>Multiplayer Tip:</strong> One person creates the game (Host), others join using the Game ID. Host must stay online!
                         </div>
-                        <div className="p-4 text-center">
-                            {modal.content && <p className="text-base text-slate-700 font-medium mb-4">{modal.content}</p>}
-                            {modal.type === 'QUIZ' && (
-                                <div className="grid gap-2">
-                                    <p className="text-base font-bold mb-2">{modal.question}</p>
-                                    {modal.options.map((opt, i) => (
-                                        <button key={i} onClick={() => onAction('ANSWER', i)} 
-                                            className="text-left p-2 px-3 border-2 border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-500 transition font-medium text-sm text-slate-700 active:scale-95">
-                                            {opt}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {modal.type === 'BUY' && (
-                                <div className="flex gap-2">
-                                    <button onClick={() => onAction('CONFIRM_BUY')} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700 transition">Buy</button>
-                                    <button onClick={onClose} className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-lg font-bold hover:bg-slate-300 transition">Pass</button>
-                                </div>
-                            )}
-                            {modal.type === 'RENT' && (
-                                <button onClick={() => onAction('PAY_RENT')} className="w-full bg-red-500 text-white py-2 rounded-lg font-bold hover:bg-red-600 transition">Pay Rent</button>
-                            )}
-                            {modal.type === 'ALERT' && (
-                                <button onClick={onClose} className="w-full bg-slate-800 text-white py-2 rounded-lg font-bold hover:bg-slate-900 transition">Okay</button>
-                            )}
-                        </div>
+                    </div>
+                    <div className="p-4 border-t bg-slate-50 flex justify-end">
+                        <button onClick={onClose} className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold transition shadow-lg transform active:scale-95">
+                            Let's Play!
+                        </button>
                     </div>
                 </div>
-            );
-        };
-
-        const BoardTile = ({ tile, players, positionStyle }) => {
-            const owner = players.find(p => p.peerId === tile.ownerId);
-            const isCorner = [0, 5, 10, 15].includes(tile.id);
-            
-            // Layout logic based on position to ensure content orientation is correct
-            let flexClass = "flex-col-reverse"; 
-            let colorBarClass = "h-[20%] w-full border-t border-slate-300";
-            
-            if (positionStyle === 'top') {
-                flexClass = "flex-col";
-                colorBarClass = "h-[20%] w-full border-b border-slate-300";
-            } else if (positionStyle === 'left') {
-                flexClass = "flex-row";
-                colorBarClass = "w-[20%] h-full border-r border-slate-300";
-            } else if (positionStyle === 'right') {
-                flexClass = "flex-row-reverse";
-                colorBarClass = "w-[20%] h-full border-l border-slate-300";
-            }
-
-            const getGroupColor = (g) => {
-                if(g==='brown') return 'bg-[#8B4513]';
-                if(g==='light_blue') return 'bg-[#87CEEB]';
-                if(g==='pink') return 'bg-[#FF69B4]';
-                if(g==='orange') return 'bg-[#FFA500]';
-                if(g==='red') return 'bg-[#FF0000]';
-                if(g==='blue') return 'bg-[#0000FF]';
-                return 'bg-slate-200';
-            };
-
-            return (
-                <div className={`w-full h-full relative bg-white border-[0.5px] border-slate-300 select-none overflow-hidden ${isCorner ? 'bg-slate-50 z-10' : ''}`}>
-                    
-                    <div className={`w-full h-full flex ${isCorner ? 'items-center justify-center' : flexClass}`}>
-                        
-                        {tile.type === TileType.PROPERTY && !isCorner && (
-                            <div className={`${colorBarClass} ${getGroupColor(tile.group)}`}></div>
-                        )}
-                        
-                        <div className={`flex-1 flex flex-col items-center justify-center p-[2px] text-center overflow-hidden`}>
-                            <span className="text-[2.5vmin] md:text-[1.8vmin] font-bold leading-none w-full truncate px-1">{tile.name}</span>
-                            
-                            {tile.type === TileType.PROPERTY && !owner && (
-                                <span className="text-[2vmin] md:text-[1.5vmin] text-slate-500 font-mono mt-[2px]">${tile.price}</span>
-                            )}
-                            
-                            {tile.type === TileType.START && <span className="text-[4vmin]">🏁</span>}
-                            {tile.type === TileType.JAIL && <span className="text-[4vmin]">⛓️</span>}
-                            {tile.type === TileType.PARKING && <span className="text-[4vmin]">🅿️</span>}
-                            {tile.type === TileType.CHANCE && <span className="text-[4vmin]">❓</span>}
-                        </div>
-                    </div>
-
-                    {owner && (
-                        <div className="absolute inset-0 border-[4px] pointer-events-none opacity-50" style={{borderColor: owner.color}}></div>
-                    )}
-
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                         <div className="flex flex-wrap justify-center gap-[2px]">
-                            {players.filter(p => p.position === tile.id).map(p => (
-                                <div key={p.peerId} className="w-[3vmin] h-[3vmin] rounded-full border border-white shadow-sm ring-1 ring-black/20" style={{backgroundColor: p.color}}></div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
+            </div>
+        );
 
         const App = () => {
-            const [gameState, dispatch] = useReducer(gameReducer, initialState);
-            
-            // Network State
-            const [peer, setPeer] = useState(null);
-            const [myId, setMyId] = useState('');
+            const [state, dispatch] = useReducer(reducer, initialState);
+            const [myId, setMyId] = useState(null);
             const [hostIdInput, setHostIdInput] = useState('');
-            const [userName, setUserName] = useState('');
+            const [nameInput, setNameInput] = useState('Player ' + Math.floor(Math.random()*100));
             const [isHost, setIsHost] = useState(false);
-            const [statusMsg, setStatusMsg] = useState('');
-            const [isConnecting, setIsConnecting] = useState(false);
-            
-            // Game UI State
-            const [activeModal, setActiveModal] = useState(null);
-            const [pendingTileId, setPendingTileId] = useState(null);
+            const [peer, setPeer] = useState(null);
+            const [conn, setConn] = useState(null); // For Client
+            const [conns, setConns] = useState([]); // For Host
+            const [msg, setMsg] = useState('');
+            const [showHelp, setShowHelp] = useState(true);
 
-            // Refs for reliable connectivity
-            const connectionsRef = useRef([]); // Host uses this to track clients
-            const hostConnRef = useRef(null);  // Client uses this to track host
-            const heartbeatRef = useRef(null);
+            // Modal States
+            const [activeModal, setActiveModal] = useState(null); // { type: 'QUIZ'|'RENT', data: ... }
 
-            // --- P2P SETUP ---
+            // 1. Initialize Peer
             useEffect(() => {
-                const randomName = 'Player' + Math.floor(Math.random() * 999);
-                setUserName(randomName);
-
-                // Create Peer with Google STUN servers only (Most reliable for free usage)
-                const newPeer = new Peer(undefined, {
-                    debug: 1,
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun1.l.google.com:19302' },
-                            { urls: 'stun:stun2.l.google.com:19302' },
-                        ]
-                    }
+                const p = new Peer(undefined, { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+                p.on('open', (id) => { setMyId(id); setMsg('Ready to Connect'); });
+                p.on('error', (err) => setMsg('Error: ' + err.type));
+                
+                // HOST LOGIC: Listen for connections
+                p.on('connection', (c) => {
+                    c.on('open', () => {
+                        setConns(prev => [...prev, c]); // Add to broadcast list
+                        // Listen for actions from this client
+                        c.on('data', (data) => {
+                            if (data.type === 'ACTION') {
+                                dispatch(data.payload); // Execute locally
+                            } else if (data.type === 'JOIN') {
+                                dispatch({ type: 'ADD_PLAYER', payload: data.payload });
+                            }
+                        });
+                    });
                 });
 
-                newPeer.on('open', (id) => {
-                    console.log('My ID:', id);
-                    setMyId(id);
-                    setStatusMsg('');
-                });
-
-                newPeer.on('connection', (conn) => {
-                    // This triggers when someone connects to ME
-                    handleIncomingConnection(conn);
-                });
-
-                newPeer.on('error', (err) => {
-                    console.error("Peer Error:", err);
-                    setIsConnecting(false);
-                    if (err.type === 'peer-unavailable') {
-                        setStatusMsg("❌ Game ID not found. Check the ID and try again.");
-                    } else if (err.type === 'network' || err.type === 'disconnected') {
-                        setStatusMsg("⚠️ Network issue. Attempting reconnect...");
-                        newPeer.reconnect();
-                    } else {
-                        setStatusMsg(`Error: ${err.type}`);
-                    }
-                });
-
-                newPeer.on('disconnected', () => {
-                    setStatusMsg("⚠️ Disconnected from signaling server.");
-                });
-
-                setPeer(newPeer);
-
-                return () => {
-                    newPeer.destroy();
-                    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-                };
+                setPeer(p);
+                return () => p.destroy();
             }, []);
 
-            // Heartbeat Logic
+            // 2. State Broadcast (Host Only)
             useEffect(() => {
-                heartbeatRef.current = setInterval(() => {
-                    if (isHost) {
-                        connectionsRef.current.forEach(conn => {
-                            if (conn.open) conn.send({ type: 'PING' });
-                        });
-                    } else if (hostConnRef.current?.open) {
-                        hostConnRef.current.send({ type: 'PING' });
-                    }
-                }, 3000); // Ping every 3 seconds
-
-                return () => clearInterval(heartbeatRef.current);
-            }, [isHost]);
-
-            const handleIncomingConnection = (conn) => {
-                conn.on('open', () => {
-                    console.log("Incoming connection open");
-                    
-                    // Add to connections list if Host
-                    connectionsRef.current.push(conn);
-                    
-                    conn.on('data', (data) => {
-                        if (data.type === 'HELLO') {
-                            // Handshake Step 2: Receive Hello, Send Welcome + State
-                            console.log("Received HELLO from", data.payload.name);
-                            conn.send({ type: 'WELCOME', payload: gameState });
-                            dispatch({ type: 'JOIN_GAME', payload: data.payload });
-                        } else if (data.type === 'PING') {
-                            // Keep alive, do nothing
-                        } else if (data.type) {
-                            dispatch(data); // Game Actions
-                        }
-                    });
-
-                    conn.on('close', () => {
-                        connectionsRef.current = connectionsRef.current.filter(c => c !== conn);
-                    });
-                });
-            };
-
-            // Host syncs state to all clients whenever it changes
-            useEffect(() => {
-                if (isHost && connectionsRef.current.length > 0) {
-                    connectionsRef.current.forEach(conn => {
-                        if (conn.open) conn.send({ type: 'SYNC_STATE', payload: gameState });
+                if (isHost && conns.length > 0) {
+                    conns.forEach(c => {
+                        if (c.open) c.send({ type: 'FULL_SYNC', payload: state });
                     });
                 }
-            }, [gameState, isHost]);
+            }, [state, isHost, conns]);
 
+            // 3. Helper Functions
             const createGame = () => {
-                if(!myId) return;
                 setIsHost(true);
-                const player = { peerId: myId, name: userName, money: 1500, position: 0, isJailed: false, properties: [] };
-                dispatch({ type: 'JOIN_GAME', payload: player });
-                dispatch({ type: 'RESET_GAME' });
+                dispatch({ type: 'ADD_PLAYER', payload: { peerId: myId, name: nameInput } });
+                dispatch({ type: 'START_GAME' });
             };
 
             const joinGame = () => {
-                const targetId = hostIdInput.trim();
-                if (!targetId || !peer || targetId === myId) return;
-
-                setIsConnecting(true);
-                setStatusMsg("Connecting to host...");
-
-                const conn = peer.connect(targetId, {
-                    reliable: true,
-                    serialization: 'json'
+                if (!hostIdInput || !peer) return;
+                setMsg('Connecting...');
+                const c = peer.connect(hostIdInput);
+                c.on('open', () => {
+                    setMsg('Connected! Waiting for host...');
+                    setConn(c);
+                    // Send Join Request
+                    c.send({ type: 'JOIN', payload: { peerId: myId, name: nameInput } });
                 });
-
-                hostConnRef.current = conn;
-
-                // Connection Timeout Failsafe
-                const timer = setTimeout(() => {
-                    if (!conn.open) {
-                        setIsConnecting(false);
-                        setStatusMsg("❌ Connection timed out. Try again or use a different network.");
-                        conn.close();
+                c.on('data', (data) => {
+                    if (data.type === 'FULL_SYNC') {
+                        dispatch({ type: 'FULL_SYNC', payload: data.payload });
                     }
-                }, 10000);
-
-                conn.on('open', () => {
-                    clearTimeout(timer);
-                    setStatusMsg("Handshaking...");
-                    // Handshake Step 1: Send Hello
-                    const player = { peerId: myId, name: userName, money: 1500, position: 0, isJailed: false, properties: [] };
-                    conn.send({ type: 'HELLO', payload: player });
-                });
-
-                conn.on('data', (data) => {
-                    if (data.type === 'WELCOME') {
-                        // Handshake Step 3: Receive Welcome, Enter Game
-                        console.log("Joined Game!");
-                        setIsConnecting(false);
-                        setStatusMsg("");
-                        dispatch({ type: 'SYNC_STATE', payload: data.payload });
-                    } else if (data.type === 'SYNC_STATE') {
-                        dispatch({ type: 'SYNC_STATE', payload: data.payload });
-                    } else if (data.type === 'PING') {
-                        // Keep alive
-                    }
-                });
-
-                conn.on('close', () => {
-                    setStatusMsg("⚠️ Host disconnected.");
-                    setIsConnecting(false);
-                });
-                
-                conn.on('error', (err) => {
-                    console.error("Conn Error", err);
-                    setStatusMsg("Connection Error");
-                    setIsConnecting(false);
                 });
             };
 
-            const sendAction = (action) => {
+            const sendGameAction = (action) => {
+                // If Host, do it locally (useEffect will broadcast). If Client, send to Host.
                 if (isHost) {
                     dispatch(action);
-                } else if (hostConnRef.current?.open) {
-                    hostConnRef.current.send(action);
+                } else if (conn && conn.open) {
+                    conn.send({ type: 'ACTION', payload: action });
                 }
             };
 
-            // Game Logic Triggers (Modals)
-            const myPlayer = gameState.players.find(p => p.peerId === myId);
-            const isMyTurn = myPlayer && gameState.players[gameState.currentPlayerIndex]?.peerId === myId;
-            const prevPos = useRef(0);
+            // 4. Game Logic Triggers (Movement, Land on Tile)
+            const myPlayer = state.players.find(p => p.peerId === myId);
+            const isMyTurn = state.players[state.currentPlayerIndex]?.peerId === myId;
+            const prevPosRef = useRef(0);
 
             useEffect(() => {
-                if (!myPlayer) return;
-                if (myPlayer.position !== prevPos.current) {
-                    const tile = gameState.tiles[myPlayer.position];
-                    if (isMyTurn) {
-                        if (tile.type === TileType.PROPERTY && !tile.ownerId) {
-                            setTimeout(() => {
-                                const q = SDG_QUESTIONS[Math.floor(Math.random()*SDG_QUESTIONS.length)];
-                                setPendingTileId(tile.id);
-                                setActiveModal({ type: 'QUIZ', ...q, title: 'SDG Challenge' });
-                            }, 800);
-                        } else if (tile.type === TileType.PROPERTY && tile.ownerId && tile.ownerId !== myId) {
-                            setTimeout(() => {
-                                setActiveModal({ type: 'RENT', title: 'Pay Rent', content: `Property Owned by Opponent`, amount: tile.rent, ownerId: tile.ownerId });
-                            }, 800);
+                if (!myPlayer || !isMyTurn) return;
+                if (myPlayer.position !== prevPosRef.current) {
+                    // Landed logic
+                    const tile = state.tiles[myPlayer.position];
+                    
+                    // Delay slightly for visual movement
+                    setTimeout(() => {
+                        if (tile.type === TileType.PROPERTY) {
+                            if (!tile.ownerId) {
+                                // Offer to buy
+                                const q = SDG_QUESTIONS[Math.floor(Math.random() * SDG_QUESTIONS.length)];
+                                setActiveModal({ type: 'QUIZ', tile, q });
+                            } else if (tile.ownerId !== myId) {
+                                // Pay Rent
+                                setActiveModal({ type: 'RENT', tile, amount: tile.rent });
+                            }
                         }
-                    }
-                    prevPos.current = myPlayer.position;
+                    }, 600);
+                    
+                    prevPosRef.current = myPlayer.position;
                 }
             }, [myPlayer?.position, isMyTurn]);
 
-            const handleModalAction = (type, data) => {
-                if (type === 'ANSWER') {
-                    if (data === activeModal.correctIndex) {
-                        const tile = gameState.tiles[pendingTileId];
-                        setActiveModal({ type: 'BUY', title: 'Correct!', content: `Buy ${tile.name} for $${tile.price}?` });
-                    } else {
-                        setActiveModal({ type: 'ALERT', title: 'Wrong!', content: 'You missed the chance to buy.' });
-                    }
-                } else if (type === 'CONFIRM_BUY') {
-                    sendAction({ type: 'BUY_PROPERTY', payload: { tileId: pendingTileId } });
-                    setActiveModal(null);
-                } else if (type === 'PAY_RENT') {
-                    sendAction({ type: 'PAY_RENT', payload: { amount: activeModal.amount, to: activeModal.ownerId } });
-                    setActiveModal(null);
-                }
-            };
+            // 5. Grid Layout Logic
+            const getGridStyle = (i) => {
+                // 6x6 Grid. 0=BottomRight, 5=BottomLeft, 10=TopLeft, 15=TopRight
+                let col, row;
+                if (i <= 5) { row = 6; col = 6 - i; } // Bottom: 6,5,4,3,2,1
+                else if (i <= 10) { row = 6 - (i - 5); col = 1; } // Left: 5,4,3,2,1
+                else if (i <= 15) { row = 1; col = 1 + (i - 10); } // Top: 1,2,3,4,5,6
+                else { row = 1 + (i - 15); col = 6; } // Right: 2,3,4,5
 
-            // Grid Calculation - Force Square using vmin
-            const getTileProps = (i) => {
-                let style = {};
-                let positionStyle = 'bottom';
-                
-                // Grid is 6x6. 
-                // Rows: 1..6, Cols: 1..6
-                if (i === 0) { style = { gridArea: '6 / 6 / 7 / 7' }; positionStyle = 'bottom-right';} 
-                else if (i <= 4) { style = { gridArea: `6 / ${6-i} / 7 / ${7-i}` }; positionStyle = 'bottom'; } 
-                else if (i === 5) { style = { gridArea: '6 / 1 / 7 / 2' }; positionStyle = 'bottom-left';} 
-                else if (i <= 9) { style = { gridArea: `${6-(i-5)} / 1 / ${7-(i-5)} / 2` }; positionStyle = 'left'; } 
-                else if (i === 10) { style = { gridArea: '1 / 1 / 2 / 2' }; positionStyle = 'top-left';} 
-                else if (i <= 14) { style = { gridArea: `1 / ${1+(i-10)} / 2 / ${2+(i-10)}` }; positionStyle = 'top'; } 
-                else if (i === 15) { style = { gridArea: '1 / 6 / 2 / 7' }; positionStyle = 'top-right';} 
-                else { style = { gridArea: `${1+(i-15)} / 6 / ${2+(i-15)} / 7` }; positionStyle = 'right'; }
-
-                return { style, positionStyle };
+                return { gridColumn: col, gridRow: row };
             };
 
             // --- RENDER ---
-            if (gameState.gameStatus === 'LOBBY' || !myId) {
+
+            // A. Help Button
+            const HelpBtn = () => (
+                <button onClick={() => setShowHelp(true)} className="fixed top-4 right-4 z-40 bg-white/80 backdrop-blur shadow-lg rounded-full w-10 h-10 flex items-center justify-center font-bold text-slate-700 hover:scale-110 transition border border-slate-200">
+                    ?
+                </button>
+            );
+
+            // B. Lobby View
+            if (state.gameStatus === 'LOBBY') {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-100 to-blue-100">
-                        <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full text-center space-y-6 border-4 border-slate-800 animate-pop">
-                            <h1 className="text-5xl font-black text-green-600 tracking-tighter brand-font">EcoPoly 🌍</h1>
+                    <div className="min-h-screen flex items-center justify-center p-4">
+                        {showHelp && <Instructions onClose={() => setShowHelp(false)} />}
+                        {!showHelp && <HelpBtn />}
+                        
+                        <div className="glass-panel max-w-md w-full p-8 rounded-3xl text-center space-y-6 animate-pop">
+                            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 drop-shadow-sm">EcoPoly</h1>
                             
+                            <div className="space-y-2 text-left">
+                                <label className="text-sm font-bold text-slate-600 ml-1">Your Name</label>
+                                <input className="w-full p-4 bg-white/50 border border-white rounded-xl focus:ring-2 ring-emerald-400 outline-none transition font-bold text-slate-700" value={nameInput} onChange={e => setNameInput(e.target.value)} />
+                            </div>
+
                             {!myId ? (
-                                <div className="text-slate-500 font-bold animate-pulse">Initializing Network...</div>
+                                <div className="text-slate-400 font-bold animate-pulse">Initializing Network...</div>
                             ) : (
-                                <>
-                                    <div className="space-y-2">
-                                        <label className="block text-left text-sm font-bold text-slate-700">Your Name</label>
-                                        <input className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none font-bold text-slate-700" value={userName} onChange={e=>setUserName(e.target.value)} />
-                                    </div>
-                                    
-                                    <button onClick={createGame} className="w-full bg-green-500 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-green-600 transition transform hover:scale-[1.02]">
-                                        Create New Game
+                                <div className="space-y-4">
+                                    <button onClick={createGame} className="w-full bg-gradient-to-r from-emerald-400 to-teal-500 text-white p-4 rounded-xl font-bold shadow-lg shadow-emerald-200 hover:shadow-xl transform hover:-translate-y-1 transition">
+                                        Create Game (Host)
                                     </button>
                                     
                                     <div className="relative flex py-2 items-center">
-                                        <div className="flex-grow border-t-2 border-slate-100"></div>
-                                        <span className="mx-4 text-slate-300 font-bold text-sm">OR</span>
-                                        <div className="flex-grow border-t-2 border-slate-100"></div>
+                                        <div className="flex-grow border-t border-slate-300"></div>
+                                        <span className="flex-shrink mx-4 text-slate-400 text-sm font-bold">OR JOIN</span>
+                                        <div className="flex-grow border-t border-slate-300"></div>
                                     </div>
-                                    
-                                    <div className="space-y-3">
-                                        <label className="block text-left text-xs font-bold text-slate-400">Enter Game ID to Join</label>
-                                        <input 
-                                            className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none font-mono text-center text-lg tracking-widest text-slate-800 placeholder:text-slate-300" 
-                                            value={hostIdInput} 
-                                            onChange={e=>setHostIdInput(e.target.value)} 
-                                            placeholder="Paste ID Here" 
-                                        />
-                                        
-                                        {statusMsg && <div className="text-red-500 text-sm font-bold bg-red-50 p-3 rounded-lg border border-red-100">{statusMsg}</div>}
-                                        
-                                        <button onClick={joinGame} disabled={isConnecting} className={`w-full text-white px-6 py-3 rounded-xl font-bold shadow-lg transition ${isConnecting ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 transform hover:scale-[1.02]'}`}>
-                                            {isConnecting ? 'Joining...' : 'Join Game'}
-                                        </button>
+
+                                    <div className="flex gap-2">
+                                        <input className="flex-1 p-3 bg-white/50 border border-white rounded-xl outline-none text-center font-mono text-sm" placeholder="Paste Host ID" value={hostIdInput} onChange={e => setHostIdInput(e.target.value)} />
+                                        <button onClick={joinGame} className="bg-blue-500 text-white px-6 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-600 transition">Join</button>
                                     </div>
-                                </>
+                                    <div className="text-xs text-slate-500 font-bold min-h-[20px]">{msg}</div>
+                                </div>
                             )}
                         </div>
                     </div>
                 );
             }
 
+            // C. Game View
             return (
-                <div className="h-screen w-screen bg-slate-200 flex items-center justify-center overflow-hidden font-sans">
-                    
-                    {/* Game Layout: Sidebar (Mobile Top / Desktop Left) + Square Board */}
-                    <div className="flex flex-col md:flex-row gap-4 w-full h-full md:p-4 max-w-[1600px] items-center justify-center">
-                        
-                        {/* Sidebar / Stats */}
-                        <div className="w-full md:w-80 flex-shrink-0 bg-white md:rounded-2xl shadow-xl overflow-hidden flex flex-col h-[20vh] md:h-[95vmin] order-2 md:order-1">
-                            <div className="p-3 bg-slate-50 border-b flex justify-between items-center">
-                                <h2 className="text-xl font-black text-green-700 brand-font">EcoPoly</h2>
-                                <button className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200" onClick={() => navigator.clipboard.writeText(myId)}>
-                                    COPY ID 📋
-                                </button>
-                            </div>
-                            
-                            {/* Player List */}
-                            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                                {gameState.players.map((p, i) => (
-                                    <div key={p.peerId} className={`flex justify-between items-center p-2 rounded-lg border-2 ${gameState.currentPlayerIndex === i ? 'border-green-500 bg-green-50 shadow-sm' : 'border-slate-100'}`}>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm" style={{backgroundColor: p.color}}>
-                                                {p.name[0].toUpperCase()}
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-700">{p.name}</span>
-                                                {gameState.currentPlayerIndex === i && <span className="text-[10px] text-green-600 font-bold">CURRENT TURN</span>}
-                                            </div>
-                                        </div>
-                                        <div className="font-mono font-bold text-slate-800">${p.money}</div>
-                                    </div>
-                                ))}
-                            </div>
+                <div className="h-screen w-full flex flex-col md:flex-row items-center justify-center bg-slate-100 overflow-hidden relative">
+                    {showHelp && <Instructions onClose={() => setShowHelp(false)} />}
+                    <HelpBtn />
 
-                            {/* Game Log */}
-                            <div className="h-24 md:h-40 bg-slate-900 text-slate-300 p-3 text-xs font-mono overflow-y-auto border-t-4 border-slate-800">
-                                {gameState.logs.map((l,i) => <div key={i} className="mb-1 opacity-90">> {l}</div>)}
-                            </div>
+                    {/* Left: Player List */}
+                    <div className="md:absolute md:left-6 md:top-6 md:bottom-6 w-full md:w-72 glass-panel md:rounded-3xl flex flex-col z-20 md:z-10 order-2 md:order-1 h-[20vh] md:h-auto border-t md:border-t-0">
+                        <div className="p-4 border-b border-slate-200/50 flex justify-between items-center">
+                            <span className="font-bold text-slate-700">Players</span>
+                            <button className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold hover:bg-blue-200" onClick={() => navigator.clipboard.writeText(myId)}>COPY ID</button>
                         </div>
-
-                        {/* Square Board Container */}
-                        <div className="order-1 md:order-2 relative bg-white shadow-2xl rounded-lg border-[6px] border-slate-800 overflow-hidden" 
-                             style={{
-                                 width: '95vmin', 
-                                 height: '95vmin',
-                                 maxWidth: '800px',
-                                 maxHeight: '800px'
-                             }}>
-                            
-                            <div className="grid grid-cols-6 grid-rows-6 gap-0 w-full h-full bg-slate-800">
-                                
-                                {/* Center Hub */}
-                                <div className="col-start-2 col-end-6 row-start-2 row-end-6 bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden pattern-bg">
-                                    <h1 className="text-[12vmin] font-black text-slate-900/5 rotate-[-15deg] absolute select-none">EcoPoly</h1>
-                                    
-                                    {/* Controls Widget */}
-                                    <div className="z-10 bg-white/90 backdrop-blur p-4 rounded-2xl border border-slate-200 shadow-xl flex flex-col items-center gap-4 w-2/3 max-w-sm">
-                                        
-                                        {/* Dice Area */}
-                                        <div className="flex gap-3 justify-center h-16 md:h-20 w-full">
-                                            <div className="aspect-square h-full"><Icons.Dice val={gameState.dice[0]} /></div>
-                                            <div className="aspect-square h-full"><Icons.Dice val={gameState.dice[1]} /></div>
-                                        </div>
-                                        
-                                        {/* Turn Info */}
-                                        <div className="text-center w-full">
-                                            {isMyTurn ? (
-                                                <div className="flex gap-2 justify-center w-full">
-                                                    <button onClick={() => sendAction({ type: 'ROLL_DICE' })} className="flex-1 bg-green-500 text-white py-2 rounded-lg font-bold shadow hover:bg-green-600 active:translate-y-1 transition text-sm md:text-base">
-                                                        ROLL
-                                                    </button>
-                                                    <button onClick={() => sendAction({ type: 'END_TURN' })} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded-lg font-bold shadow hover:bg-slate-300 active:translate-y-1 transition text-sm md:text-base">
-                                                        SKIP
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="text-center py-2 bg-slate-100 rounded-lg w-full">
-                                                    <span className="text-xs text-slate-400 font-bold block">WAITING FOR</span>
-                                                    <span className="font-black text-slate-700">{gameState.players[gameState.currentPlayerIndex]?.name}</span>
-                                                </div>
-                                            )}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                            {state.players.map((p, i) => (
+                                <div key={i} className={`p-3 rounded-xl flex justify-between items-center transition-all ${state.currentPlayerIndex === i ? 'bg-white shadow-md border-l-4 border-emerald-500' : 'hover:bg-white/40'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full shadow-inner flex items-center justify-center text-white font-bold text-xs" style={{backgroundColor: p.color}}>{p.name[0]}</div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-slate-800">{p.name}</span>
+                                            <span className="text-xs text-slate-500">Pos: {state.tiles[p.position].name}</span>
                                         </div>
                                     </div>
+                                    <span className="font-mono font-bold text-emerald-700">${p.money}</span>
                                 </div>
+                            ))}
+                        </div>
+                        <div className="h-32 bg-slate-900/5 p-3 overflow-y-auto text-xs font-mono space-y-1 border-t border-slate-200/50 text-slate-600">
+                            {state.logs.map((l, i) => <div key={i}>&gt; {l}</div>)}
+                        </div>
+                    </div>
 
-                                {/* Tiles Generation */}
-                                {gameState.tiles.map((tile, i) => {
-                                    const { style, positionStyle } = getTileProps(i);
+                    {/* Center: Board */}
+                    <div className="flex-1 w-full h-full flex items-center justify-center order-1 md:order-2 p-2 md:p-0">
+                        <div className="relative bg-white rounded-xl shadow-2xl border-[8px] border-slate-800 box-border overflow-hidden" 
+                             style={{ width: '95vmin', height: '95vmin', maxWidth: '800px', maxHeight: '800px' }}>
+                            
+                            <div className="w-full h-full grid grid-cols-6 grid-rows-6">
+                                
+                                {/* Tiles */}
+                                {state.tiles.map((tile, i) => {
+                                    const style = getGridStyle(i);
+                                    const owner = state.players.find(p => p.peerId === tile.ownerId);
+                                    const isCorner = tile.type !== TileType.PROPERTY;
+                                    
+                                    // Visuals
+                                    const groupColor = 
+                                        tile.group === 'brown' ? 'bg-amber-700' : 
+                                        tile.group === 'light_blue' ? 'bg-sky-400' :
+                                        tile.group === 'pink' ? 'bg-pink-400' :
+                                        tile.group === 'orange' ? 'bg-orange-400' :
+                                        tile.group === 'red' ? 'bg-red-500' :
+                                        tile.group === 'blue' ? 'bg-blue-600' : 'bg-slate-300';
+
                                     return (
-                                        <div key={tile.id} style={style}>
-                                            <BoardTile tile={tile} players={gameState.players} positionStyle={positionStyle} />
+                                        <div key={i} style={style} className={`relative border border-slate-200 flex flex-col overflow-hidden tile-shadow ${isCorner ? 'bg-slate-50' : 'bg-white'}`}>
+                                            {!isCorner && <div className={`h-1/5 w-full ${groupColor}`}></div>}
+                                            <div className="flex-1 flex flex-col items-center justify-center p-1 text-center">
+                                                <span className="text-[1.8vmin] font-bold leading-tight text-slate-800">{tile.name}</span>
+                                                {!isCorner && !owner && <span className="text-[1.5vmin] text-slate-400 mt-1">${tile.price}</span>}
+                                                {isCorner && <span className="text-[3vmin]">{tile.id===0?'🏁':tile.id===4?'💸':tile.id===8?'⛓️':tile.id===12?'🅿️':'❓'}</span>}
+                                            </div>
+                                            {/* Players on Tile */}
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none gap-1">
+                                                {state.players.filter(p => p.position === i).map(p => (
+                                                    <div key={p.peerId} className="w-[2.5vmin] h-[2.5vmin] rounded-full border border-white shadow-lg z-10" style={{backgroundColor: p.color}}></div>
+                                                ))}
+                                            </div>
+                                            {/* Owner Marker */}
+                                            {owner && <div className="absolute inset-0 border-4 opacity-30 pointer-events-none" style={{borderColor: owner.color}}></div>}
                                         </div>
                                     );
                                 })}
+
+                                {/* Center Hub */}
+                                <div className="col-start-2 col-end-6 row-start-2 row-end-6 bg-slate-50 flex flex-col items-center justify-center relative pattern-bg">
+                                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-300 via-blue-100 to-transparent"></div>
+                                    <h1 className="text-[8vmin] font-black text-slate-900/10 -rotate-12 select-none absolute">EcoPoly</h1>
+                                    
+                                    {/* Dice & Controls */}
+                                    <div className="z-10 flex flex-col items-center gap-4">
+                                        <div className="flex gap-4 h-16 md:h-20">
+                                            <div className="h-full aspect-square"><IconDice val={state.dice[0]} /></div>
+                                            <div className="h-full aspect-square"><IconDice val={state.dice[1]} /></div>
+                                        </div>
+                                        
+                                        {isMyTurn ? (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => sendGameAction({ type: 'ROLL_DICE' })} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-600 hover:scale-105 transition">ROLL DICE</button>
+                                                <button onClick={() => sendGameAction({ type: 'END_TURN' })} className="bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold hover:bg-slate-300 transition">SKIP</button>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white/80 backdrop-blur px-6 py-2 rounded-full font-bold text-slate-500 shadow-sm border border-slate-100">
+                                                Waiting for {state.players[state.currentPlayerIndex]?.name}...
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     </div>
 
-                    <ModalManager modal={activeModal} onClose={() => setActiveModal(null)} onAction={handleModalAction} />
+                    {/* Modals */}
+                    {activeModal && activeModal.type === 'QUIZ' && (
+                        <Modal title="SDG Quiz Challenge!" color="bg-blue-500">
+                            <p className="font-bold text-lg text-slate-800 mb-4">{activeModal.q.q}</p>
+                            <div className="grid grid-cols-1 gap-2">
+                                {activeModal.q.a.map((opt, i) => (
+                                    <button key={i} className="text-left p-3 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-300 font-medium transition text-slate-700"
+                                        onClick={() => {
+                                            if (i === activeModal.q.correct) {
+                                                // Correct
+                                                setActiveModal(null);
+                                                sendGameAction({ type: 'BUY_TILE', payload: { playerId: myId, tileId: activeModal.tile.id } });
+                                            } else {
+                                                // Wrong
+                                                setActiveModal(null);
+                                                sendGameAction({ type: 'END_TURN' }); // Penalize by ending turn (or just doing nothing)
+                                                alert("Wrong answer! Property purchase failed.");
+                                            }
+                                        }}>
+                                        {opt}
+                                    </button>
+                                ))}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {activeModal && activeModal.type === 'RENT' && (
+                        <Modal title="Pay Rent" color="bg-rose-500">
+                            <div className="text-center space-y-4">
+                                <p className="text-slate-600">You landed on <span className="font-bold text-slate-800">{activeModal.tile.name}</span>.</p>
+                                <p className="text-2xl font-black text-rose-600">PAY ${activeModal.amount}</p>
+                                <button onClick={() => {
+                                    sendGameAction({ type: 'PAY_RENT', payload: { fromId: myId, toId: activeModal.tile.ownerId, amount: activeModal.amount } });
+                                    setActiveModal(null);
+                                }} className="w-full bg-rose-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-rose-600 transition">
+                                    Pay Now
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
                 </div>
             );
         };
