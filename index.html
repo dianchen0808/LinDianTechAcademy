@@ -64,12 +64,6 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-
-        /* Rotate Logic for Sides */
-        .tile-bottom { }
-        .tile-left { writing-mode: vertical-rl; transform: rotate(180deg); }
-        .tile-top { transform: rotate(180deg); }
-        .tile-right { writing-mode: vertical-rl; }
     </style>
 </head>
 <body>
@@ -94,7 +88,7 @@
             { id: 2, name: 'Community Chest', type: TileType.CHANCE },
             { id: 3, name: 'Wind Farm', type: TileType.PROPERTY, price: 60, rent: 4, group: 'brown' },
             { id: 4, name: 'Carbon Tax', type: TileType.TAX, price: 100, description: 'Pay $100' },
-            { id: 5, name: 'Hydro Plant', type: TileType.PROPERTY, price: 100, rent: 6, group: 'light_blue' }, // Corner (Bottom Left) - Logic fixed later to be Jail usually but keeping map simple
+            { id: 5, name: 'Hydro Plant', type: TileType.PROPERTY, price: 100, rent: 6, group: 'light_blue' }, // Corner (Bottom Left)
             { id: 6, name: 'Recycling Ctr', type: TileType.PROPERTY, price: 100, rent: 6, group: 'light_blue' },
             { id: 7, name: 'Bio Lab', type: TileType.PROPERTY, price: 120, rent: 8, group: 'light_blue' },
             { id: 8, name: 'Eco Prison', type: TileType.JAIL, description: 'Just Visiting' },
@@ -146,9 +140,6 @@
                     </svg>
                 );
             },
-            User: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-            Copy: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
-            Money: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
         };
 
         // --- 3. GAME LOGIC (REDUCER) ---
@@ -300,10 +291,24 @@
             const owner = players.find(p => p.peerId === tile.ownerId);
             const isCorner = [0, 5, 10, 15].includes(tile.id);
             
-            let rotationClass = "";
-            if (positionStyle === 'left') rotationClass = "tile-left";
-            else if (positionStyle === 'right') rotationClass = "tile-right";
-            else if (positionStyle === 'top') rotationClass = "tile-top";
+            // Determine Flex Layout based on position to keep Color Bar on OUTER edge
+            // bottom -> color bar at bottom (flex-col-reverse)
+            // top -> color bar at top (flex-col)
+            // left -> color bar at left (flex-row)
+            // right -> color bar at right (flex-row-reverse)
+            let flexClass = "flex-col-reverse"; // default bottom
+            let colorBarClass = "h-[20%] w-full border-t"; // default horiz bar
+            
+            if (positionStyle === 'top') {
+                flexClass = "flex-col";
+                colorBarClass = "h-[20%] w-full border-b";
+            } else if (positionStyle === 'left') {
+                flexClass = "flex-row";
+                colorBarClass = "w-[20%] h-full border-r";
+            } else if (positionStyle === 'right') {
+                flexClass = "flex-row-reverse";
+                colorBarClass = "w-[20%] h-full border-l";
+            }
 
             const getGroupColor = (g) => {
                 if(g==='brown') return 'bg-[#8B4513]';
@@ -316,39 +321,42 @@
             };
 
             return (
-                <div className={`w-full h-full relative bg-white border border-slate-300 flex flex-col justify-between select-none overflow-hidden ${isCorner ? 'bg-slate-100 z-10' : ''}`}>
-                    {/* Inner content wrapper handles rotation */}
-                    <div className={`w-full h-full flex flex-col ${rotationClass} ${isCorner ? '' : 'justify-between'}`}>
+                <div className={`w-full h-full relative bg-white border border-slate-300 select-none overflow-hidden ${isCorner ? 'bg-slate-100 z-10' : ''}`}>
+                    
+                    {/* Content Wrapper */}
+                    <div className={`w-full h-full flex ${isCorner ? 'items-center justify-center' : flexClass}`}>
                         
-                        {/* Property Strip */}
-                        {tile.type === TileType.PROPERTY && (
-                            <div className={`h-[20%] w-full ${getGroupColor(tile.group)} border-b border-slate-800`}></div>
+                        {/* Property Color Bar (Outer Edge) */}
+                        {tile.type === TileType.PROPERTY && !isCorner && (
+                            <div className={`${colorBarClass} ${getGroupColor(tile.group)} border-slate-800`}></div>
                         )}
                         
                         {/* Text Content */}
-                        <div className="flex-1 flex flex-col items-center justify-center p-1 text-center">
-                            <span className="text-[9px] md:text-[10px] font-bold leading-tight">{tile.name}</span>
-                            {tile.type === TileType.PROPERTY && !owner && <span className="text-[9px] text-slate-500 font-mono">${tile.price}</span>}
-                            {/* Icons for specials */}
+                        <div className={`flex-1 flex flex-col items-center justify-center p-1 text-center overflow-hidden`}>
+                            <span className="text-[8px] md:text-[10px] font-bold leading-tight break-words w-full">{tile.name}</span>
+                            
+                            {tile.type === TileType.PROPERTY && !owner && (
+                                <span className="text-[8px] text-slate-500 font-mono">${tile.price}</span>
+                            )}
+                            
+                            {/* Icons */}
                             {tile.type === TileType.START && <span className="text-xl">🏁</span>}
                             {tile.type === TileType.JAIL && <span className="text-xl">⛓️</span>}
                             {tile.type === TileType.PARKING && <span className="text-xl">🅿️</span>}
                             {tile.type === TileType.CHANCE && <span className="text-xl">❓</span>}
                         </div>
-
-                        {/* Owner Strip */}
-                        {owner && (
-                            <div className="w-full h-[15%] text-[8px] text-white flex items-center justify-center font-bold" style={{backgroundColor: owner.color}}>
-                                {owner.name.substring(0,3)}
-                            </div>
-                        )}
                     </div>
 
-                    {/* Tokens Overlay (Always unrotated) */}
+                    {/* Owner Token (Small colored square) */}
+                    {owner && (
+                        <div className="absolute inset-0 border-[3px] pointer-events-none" style={{borderColor: owner.color}}></div>
+                    )}
+
+                    {/* Players Overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                          <div className="flex flex-wrap justify-center gap-1">
                             {players.filter(p => p.position === tile.id).map(p => (
-                                <div key={p.peerId} className="w-4 h-4 rounded-full border border-white shadow-sm" style={{backgroundColor: p.color}}></div>
+                                <div key={p.peerId} className="w-3 h-3 md:w-4 md:h-4 rounded-full border border-white shadow-sm" style={{backgroundColor: p.color}}></div>
                             ))}
                         </div>
                     </div>
@@ -365,9 +373,10 @@
             const [myId, setMyId] = useState('');
             const [userName, setUserName] = useState('');
             const [isHost, setIsHost] = useState(false);
-            const [statusMsg, setStatusMsg] = useState(''); // Unified status for connection
+            const [statusMsg, setStatusMsg] = useState('');
             const [activeModal, setActiveModal] = useState(null);
             const [pendingTileId, setPendingTileId] = useState(null);
+            const [isConnecting, setIsConnecting] = useState(false);
 
             const peerRef = useRef(null);
             const connRef = useRef([]);
@@ -377,51 +386,67 @@
                 const randomName = 'Player ' + Math.floor(Math.random() * 999);
                 setUserName(randomName);
 
-                // Use Google's public STUN server to fix NAT issues
-                const peer = new Peer(undefined, {
-                    debug: 1,
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:global.stun.twilio.com:3478' }
-                        ]
-                    }
-                });
+                const initPeer = () => {
+                    // Enhanced ICE servers configuration
+                    const peer = new Peer(undefined, {
+                        debug: 1,
+                        secure: true, // Force HTTPS
+                        config: {
+                            iceServers: [
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' },
+                                { urls: 'stun:stun2.l.google.com:19302' },
+                                { urls: 'stun:global.stun.twilio.com:3478' }
+                            ]
+                        }
+                    });
 
-                peer.on('open', (id) => {
-                    setMyId(id);
-                    console.log('My ID:', id);
-                });
+                    peer.on('open', (id) => {
+                        setMyId(id);
+                        console.log('My ID:', id);
+                        setStatusMsg('');
+                    });
 
-                // Listen for incoming connections (Host Logic)
-                peer.on('connection', (conn) => {
-                    console.log("Incoming connection from", conn.peer);
+                    peer.on('connection', (conn) => {
+                        console.log("Incoming connection from", conn.peer);
+                        
+                        conn.on('data', (data) => {
+                            if (data.type) dispatch(data);
+                        });
+
+                        conn.on('open', () => {
+                            connRef.current.push(conn);
+                            conn.send({ type: 'SYNC_STATE', payload: gameState });
+                        });
+                    });
+
+                    peer.on('error', (err) => {
+                        console.error("Peer Error:", err);
+                        if (err.type === 'peer-unavailable') {
+                            setStatusMsg("Error: Game ID not found. Check the code.");
+                            setIsConnecting(false);
+                        } else if (err.type === 'network' || err.type === 'disconnected') {
+                            setStatusMsg("Network connection lost. Reconnecting...");
+                        } else if (err.type === 'browser-incompatible') {
+                            setStatusMsg("Error: Browser does not support WebRTC.");
+                        } else {
+                            setStatusMsg(`Connection Error: ${err.type}`);
+                            setIsConnecting(false);
+                        }
+                    });
                     
-                    conn.on('data', (data) => {
-                        if (data.type) dispatch(data);
+                    peer.on('disconnected', () => {
+                        setStatusMsg("Disconnected from server. Attempting reconnect...");
+                        peer.reconnect();
                     });
 
-                    conn.on('open', () => {
-                        connRef.current.push(conn);
-                        // Send current state to new player
-                        conn.send({ type: 'SYNC_STATE', payload: gameState });
-                    });
-                });
+                    peerRef.current = peer;
+                };
 
-                // Global Error Handler
-                peer.on('error', (err) => {
-                    console.error("Peer Error:", err);
-                    if (err.type === 'peer-unavailable') {
-                        setStatusMsg("Error: Game ID not found. Check the code.");
-                    } else if (err.type === 'network') {
-                        setStatusMsg("Error: Network connection lost.");
-                    } else {
-                        setStatusMsg(`Error: ${err.type}`);
-                    }
-                });
-
-                peerRef.current = peer;
-                return () => peer.destroy();
+                initPeer();
+                return () => {
+                    if (peerRef.current) peerRef.current.destroy();
+                };
             }, []);
 
             // Host syncs state to all clients
@@ -437,7 +462,7 @@
             const createGame = () => {
                 if(!myId) { setStatusMsg("Network initializing, please wait..."); return; }
                 setIsHost(true);
-                setPeerId(myId); // Host uses own ID as game ID
+                setPeerId(myId);
                 const player = { peerId: myId, name: userName, money: 1500, position: 0, isJailed: false, properties: [] };
                 dispatch({ type: 'JOIN_GAME', payload: player });
                 dispatch({ type: 'RESET_GAME' });
@@ -458,27 +483,29 @@
                     return;
                 }
 
-                setStatusMsg("Connecting...");
+                setIsConnecting(true);
+                setStatusMsg("Connecting to Host...");
 
-                // Connect to Host
                 const conn = peerRef.current.connect(cleanId, {
-                    reliable: true
+                    reliable: true,
+                    serialization: 'json'
                 });
 
-                // Connection Timeout Failsafe
+                // Connection Timeout
                 const timeout = setTimeout(() => {
                     if (!conn.open) {
-                        setStatusMsg("Connection timed out. Firewalls might be blocking P2P.");
+                        setStatusMsg("Connection timed out. Firewalls might be blocking P2P. Try on 4G/different network.");
+                        setIsConnecting(false);
                     }
-                }, 5000);
+                }, 8000);
 
                 conn.on('open', () => {
                     clearTimeout(timeout);
                     console.log("Connected to Host!");
                     setStatusMsg(""); 
-                    setPeerId(cleanId); // Switch to game view
+                    setIsConnecting(false);
+                    setPeerId(cleanId);
                     
-                    // Add myself to game
                     const player = { peerId: myId, name: userName, money: 1500, position: 0, isJailed: false, properties: [] };
                     conn.send({ type: 'JOIN_GAME', payload: player });
                     connRef.current = [conn];
@@ -488,9 +515,9 @@
                     clearTimeout(timeout);
                     console.error("Conn Error:", err);
                     setStatusMsg("Connection failed.");
+                    setIsConnecting(false);
                 });
                 
-                // If connection closes
                 conn.on('close', () => {
                     setStatusMsg("Host disconnected.");
                     setPeerId('');
@@ -506,7 +533,7 @@
                 else if (connRef.current[0]?.open) connRef.current[0].send(action);
             };
 
-            // Game triggers (Rent/Quiz)
+            // Game triggers
             const myPlayer = gameState.players.find(p => p.peerId === myId);
             const isMyTurn = myPlayer && gameState.players[gameState.currentPlayerIndex]?.peerId === myId;
             const prevPos = useRef(0);
@@ -550,28 +577,17 @@
             };
 
             // Grid Layout Logic
-            // 6x6 Grid. 
-            // Bottom Right (GO) is (6,6). 
-            // Indices: 
-            // 0: (6,6) GO
-            // 1-4: Bottom Row (6,5) -> (6,2)
-            // 5: Bottom Left Corner (6,1)
-            // 6-9: Left Col (5,1) -> (2,1)
-            // 10: Top Left Corner (1,1)
-            // 11-14: Top Row (1,2) -> (1,5)
-            // 15: Top Right Corner (1,6)
-            // 16-19: Right Col (2,6) -> (5,6)
             const getTileProps = (i) => {
                 let style = {};
                 let positionStyle = 'bottom';
                 
-                if (i === 0) { style = { gridArea: '6 / 6 / 7 / 7' }; } 
+                if (i === 0) { style = { gridArea: '6 / 6 / 7 / 7' }; positionStyle = 'bottom-right';} 
                 else if (i <= 4) { style = { gridArea: `6 / ${6-i} / 7 / ${7-i}` }; positionStyle = 'bottom'; } 
-                else if (i === 5) { style = { gridArea: '6 / 1 / 7 / 2' }; } 
+                else if (i === 5) { style = { gridArea: '6 / 1 / 7 / 2' }; positionStyle = 'bottom-left';} 
                 else if (i <= 9) { style = { gridArea: `${6-(i-5)} / 1 / ${7-(i-5)} / 2` }; positionStyle = 'left'; } 
-                else if (i === 10) { style = { gridArea: '1 / 1 / 2 / 2' }; } 
+                else if (i === 10) { style = { gridArea: '1 / 1 / 2 / 2' }; positionStyle = 'top-left';} 
                 else if (i <= 14) { style = { gridArea: `1 / ${1+(i-10)} / 2 / ${2+(i-10)}` }; positionStyle = 'top'; } 
-                else if (i === 15) { style = { gridArea: '1 / 6 / 2 / 7' }; } 
+                else if (i === 15) { style = { gridArea: '1 / 6 / 2 / 7' }; positionStyle = 'top-right';} 
                 else { style = { gridArea: `${1+(i-15)} / 6 / ${2+(i-15)} / 7` }; positionStyle = 'right'; }
 
                 return { style, positionStyle };
@@ -592,7 +608,9 @@
                             <div className="flex flex-col gap-3">
                                 <input className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none font-mono text-sm text-center uppercase" value={hostId} onChange={e=>setHostId(e.target.value)} placeholder="ENTER CODE" />
                                 {statusMsg && <div className="text-red-500 text-sm font-bold bg-red-50 p-2 rounded-lg">{statusMsg}</div>}
-                                <button onClick={joinGame} className="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition">Join Game</button>
+                                <button onClick={joinGame} disabled={isConnecting} className={`text-white px-6 py-3 rounded-xl font-bold shadow-lg transition ${isConnecting ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                                    {isConnecting ? 'Connecting...' : 'Join Game'}
+                                </button>
                             </div>
                             {!myId && <p className="text-xs text-slate-400 animate-pulse">Initializing P2P Network...</p>}
                         </div>
@@ -606,7 +624,7 @@
                     <div className="w-full md:w-80 bg-white border-r-2 border-slate-200 flex flex-col z-20 shadow-lg h-[30vh] md:h-full order-2 md:order-1">
                         <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                             <h2 className="text-xl font-black text-green-700 brand-font">EcoPoly</h2>
-                            <div className="text-xs font-mono bg-slate-200 px-2 py-1 rounded cursor-pointer" onClick={() => navigator.clipboard.writeText(peerId)}>ID: {peerId} 📋</div>
+                            <div className="text-xs font-mono bg-slate-200 px-2 py-1 rounded cursor-pointer hover:bg-slate-300 transition" onClick={() => navigator.clipboard.writeText(peerId)}>ID: {peerId} 📋</div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-3">
                             {gameState.players.map((p, i) => (
