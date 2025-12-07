@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EcoPoly: SDG Edition</title>
+    
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 3. Babel (JSX Support) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'glass-white': 'rgba(255, 255, 255, 0.7)',
+                        'brand-green': '#10b981',
+                        'brand-blue': '#3b82f6',
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                        'blob': 'blob 7s infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'dice-shake': 'dice-shake 0.5s linear infinite',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        },
+                        'dice-shake': {
+                            '0%': { transform: 'translate(1px, 1px) rotate(0deg)' },
+                            '10%': { transform: 'translate(-1px, -2px) rotate(-5deg)' },
+                            '20%': { transform: 'translate(-3px, 0px) rotate(5deg)' },
+                            '30%': { transform: 'translate(3px, 2px) rotate(0deg)' },
+                            '40%': { transform: 'translate(1px, -1px) rotate(5deg)' },
+                            '50%': { transform: 'translate(-1px, 2px) rotate(-5deg)' },
+                            '60%': { transform: 'translate(-3px, 1px) rotate(0deg)' },
+                            '70%': { transform: 'translate(3px, 1px) rotate(-5deg)' },
+                            '80%': { transform: 'translate(-1px, -1px) rotate(5deg)' },
+                            '90%': { transform: 'translate(1px, 2px) rotate(0deg)' },
+                            '100%': { transform: 'translate(1px, -2px) rotate(-5deg)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Nunito', sans-serif; 
+            background-color: #e0f2fe; /* Fallback color (light blue) */
+            overflow: hidden; 
+            touch-action: manipulation;
+            overscroll-behavior: none;
+        }
+
+        /* Background Image Container */
+        #app-background {
+            /* Replace the URL below with your specific image URL if needed */
+            background-image: url('bg-main.png');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.5; /* Adjusted transparency (Lower value = more transparent/faint) */
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        .modal-enter { animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes modalPop {
+            0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        /* SVG Pattern Background for Board Center */
+        .pattern-dots {
+            background-image: radial-gradient(#94a3b8 1px, transparent 1px);
+            background-size: 20px 20px;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+        }
+
+        .tile-hover:hover {
+            transform: translateY(-2px) scale(1.02);
+            z-index: 50;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .cursor-pointer { cursor: pointer; }
+    </style>
+</head>
+<body>
+    <!-- Background Image Layer -->
+    <div id="app-background" class="fixed inset-0 z-[-1] pointer-events-none transition-opacity duration-1000"></div>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useReducer, useRef } = React;
+
+        // --- 1. GAME DATA ---
+        const TileType = { PROPERTY: 'PROPERTY', START: 'START', CHANCE: 'CHANCE', JAIL: 'JAIL', TAX: 'TAX', PARKING: 'PARKING', GO_TO_JAIL: 'GO_TO_JAIL' };
+
+        // 20 Tiles Layout (Corners at 0, 5, 10, 15)
+        const INITIAL_TILES = [
+            // Bottom Row (Right to Left): 0, 1, 2, 3, 4, 5
+            { id: 0, name: 'GO', type: TileType.START, description: 'Collect $200' },
+            { id: 1, name: 'Solar Farm', type: TileType.PROPERTY, price: 60, rent: 10, group: 'brown', level: 0 },
+            { id: 2, name: 'Wind Turbine', type: TileType.PROPERTY, price: 60, rent: 15, group: 'brown', level: 0 },
+            { id: 3, name: 'Chance', type: TileType.CHANCE },
+            { id: 4, name: 'Eco Tax', type: TileType.TAX, price: 100, description: 'Pay $100' },
+            { id: 5, name: 'JAIL', type: TileType.JAIL, description: 'Just Visiting' }, // Corner Bottom-Left
+
+            // Left Column (Bottom to Top): 6, 7, 8, 9, 10
+            { id: 6, name: 'Hydro Dam', type: TileType.PROPERTY, price: 100, rent: 20, group: 'light_blue', level: 0 }, 
+            { id: 7, name: 'Recycle Hub', type: TileType.PROPERTY, price: 100, rent: 20, group: 'light_blue', level: 0 },
+            { id: 8, name: 'Bio Lab', type: TileType.PROPERTY, price: 120, rent: 25, group: 'light_blue', level: 0 },
+            { id: 9, name: 'Chance', type: TileType.CHANCE },
+            { id: 10, name: 'Free Park', type: TileType.PARKING, description: 'Relax' }, // Corner Top-Left
+
+            // Top Row (Left to Right): 11, 12, 13, 14, 15
+            { id: 11, name: 'Comm. Garden', type: TileType.PROPERTY, price: 140, rent: 30, group: 'pink', level: 0 },
+            { id: 12, name: 'Tesla Stn', type: TileType.PROPERTY, price: 140, rent: 30, group: 'pink', level: 0 }, 
+            { id: 13, name: 'Green Uni', type: TileType.PROPERTY, price: 160, rent: 35, group: 'pink', level: 0 },
+            { id: 14, name: 'Carbon Tax', type: TileType.TAX, price: 50, description: 'Pay $50' },
+            { id: 15, name: 'Go To Jail', type: TileType.GO_TO_JAIL, description: 'Move to Jail' }, // Corner Top-Right
+
+            // Right Column (Top to Bottom): 16, 17, 18, 19
+            { id: 16, name: 'Eco Tower', type: TileType.PROPERTY, price: 180, rent: 40, group: 'green', level: 0 },
+            { id: 17, name: 'Vert. Forest', type: TileType.PROPERTY, price: 180, rent: 40, group: 'green', level: 0 },
+            { id: 18, name: 'Smart City', type: TileType.PROPERTY, price: 200, rent: 50, group: 'green', level: 0 },
+            { id: 19, name: 'Chance', type: TileType.CHANCE },
+        ];
+
+        const SDG_QUESTIONS = [
+            // Basics & General
+            { q: "How many Sustainable Development Goals (SDGs) are there?", a: ["10 Goals", "15 Goals", "17 Goals"], c: 2 },
+            { q: "What is the target year to achieve the 2030 Agenda?", a: ["2025", "2030", "2050"], c: 1 },
+            { q: "What is the core principle of the SDGs?", a: ["Leave no one behind", "Profit first", "Technology saves all"], c: 0 },
+
+            // Environment (Climate, Water, Energy, Land)
+            { q: "What is SDG 13?", a: ["Climate Action", "Zero Hunger", "Quality Education"], c: 0 },
+            { q: "Which gas contributes most to global warming?", a: ["Oxygen", "Carbon Dioxide", "Nitrogen"], c: 1 },
+            { q: "What is a renewable energy source (SDG 7)?", a: ["Coal", "Solar Power", "Natural Gas"], c: 1 },
+            { q: "What is the '3R' principle for waste (SDG 12)?", a: ["Read, Run, Rest", "Reduce, Reuse, Recycle", "Rice, Rain, River"], c: 1 },
+            { q: "Which sector consumes the most freshwater (SDG 6)?", a: ["Domestic", "Agriculture", "Industry"], c: 1 },
+            { q: "SDG 14 'Life Below Water' focuses on protecting?", a: ["Oceans and marine life", "Underground water", "Rainwater"], c: 0 },
+            { q: "SDG 15 'Life on Land' aims to combat?", a: ["Urbanization", "Desertification & biodiversity loss", "Cloud formation"], c: 1 },
+
+            // Social (Poverty, Health, Education, Equality)
+            { q: "SDG 1 aims to end what everywhere?", a: ["Poverty", "Internet lag", "Traffic"], c: 0 },
+            { q: "Which goal focuses on 'Zero Hunger'?", a: ["Goal 1", "Goal 2", "Goal 5"], c: 1 },
+            { q: "SDG 3 ensures healthy lives and promotes...?", a: ["Wealth", "Well-being", "Fame"], c: 1 },
+            { q: "SDG 4 aims for inclusive and quality...?", a: ["Education", "Entertainment", "Transport"], c: 0 },
+            { q: "SDG 5 aims to achieve equality for?", a: ["All genders", "Big companies", "Gamers"], c: 0 },
+
+            // Economy & Community
+            { q: "SDG 8 promotes decent work and...?", a: ["Economic Growth", "Sleeping", "Free Lunch"], c: 0 },
+            { q: "SDG 11 aims to make cities...?", a: ["Crowded", "Inclusive, safe, resilient, sustainable", "Expensive"], c: 1 },
+            { q: "Which goal targets reducing inequality (SDG 10)?", a: ["Within and among countries", "Only in rich countries", "Between planets"], c: 0 },
+            { q: "SDG 9 focuses on Industry, Innovation, and...?", a: ["Insects", "Infrastructure", "Icebergs"], c: 1 },
+            { q: "SDG 17 emphasizes the importance of...?", a: ["Competition", "Partnerships", "Isolation"], c: 1 },
+        ];
+
+        const PROPERTY_COLORS = {
+            brown: '#8d6e63',
+            light_blue: '#4fc3f7',
+            pink: '#f06292',
+            green: '#66bb6a',
+        };
+
+        const AVATARS = [
+            { id: 'p1', color: 'bg-red-500', border: 'border-red-500', name: 'Red' },
+            { id: 'p2', color: 'bg-blue-500', border: 'border-blue-500', name: 'Blue' },
+            { id: 'p3', color: 'bg-yellow-500', border: 'border-yellow-500', name: 'Yellow' },
+            { id: 'p4', color: 'bg-purple-500', border: 'border-purple-500', name: 'Purple' },
+        ];
+
+        // Helper to get coordinates for smooth animation
+        // Returns percentage { top, left } for absolute positioning
+        function getTileCoordinates(id) {
+            const rowSize = 100 / 6;
+            const colSize = 100 / 6;
+
+            // 0-5: Bottom Row (Right -> Left)
+            // Row 6 (index 5), Cols 5 -> 0
+            if (id >= 0 && id <= 5) {
+                return { top: 5 * rowSize, left: (5 - id) * colSize };
+            }
+            // 6-10: Left Col (Bottom -> Top)
+            // Row (11-id), Col 0
+            if (id >= 6 && id <= 10) {
+                return { top: (11 - id) * rowSize, left: 0 };
+            }
+            // 11-15: Top Row (Left -> Right)
+            // Row 0, Cols (id-10)
+            if (id >= 11 && id <= 15) {
+                return { top: 0, left: (id - 10) * colSize };
+            }
+            // 16-19: Right Col (Top -> Bottom)
+            // Row (id-14), Col 5
+            if (id >= 16 && id <= 19) {
+                return { top: (id - 14) * rowSize, left: 5 * colSize };
+            }
+            return { top: 0, left: 0 };
+        }
+
+        // --- 2. GAME ENGINE ---
+        const initialState = {
+            screen: 'SETUP', // SETUP, GAME
+            players: [],
+            currentPlayerIdx: 0,
+            board: INITIAL_TILES,
+            dice: [1, 1],
+            isDiceRolling: false,
+            stepsRemaining: 0, // For smooth movement
+            activeModal: null, // { type: 'QUIZ'|'BUY'|'RENT'|'NOTIFY'|'INSPECT', data: ... }
+            log: [],
+            winner: null
+        };
+
+        function reducer(state, action) {
+            switch (action.type) {
+                case 'START_GAME':
+                    return { ...state, screen: 'GAME', players: action.payload, log: ['Game Started!'] };
+                
+                case 'ROLL_DICE_START':
+                    return { ...state, isDiceRolling: true };
+
+                case 'ROLL_DICE_COMPLETE': {
+                    const { die1, die2 } = action.payload;
+                    const roll = die1 + die2;
+                    const player = state.players[state.currentPlayerIdx];
+                    
+                    let newLog = [...state.log, `${player.name} rolled ${roll} (${die1}+${die2}).`];
+
+                    // Jail Check
+                    if (player.isInJail) {
+                        const isDouble = die1 === die2;
+                        
+                        if (isDouble) {
+                             newLog.push("Doubles! Escaped Jail!");
+                             // Escape Jail immediately, then start moving steps
+                             const newPlayers = [...state.players];
+                             newPlayers[state.currentPlayerIdx] = { ...player, isInJail: false };
+                             
+                             return { 
+                                 ...state, 
+                                 dice: [die1, die2], 
+                                 isDiceRolling: false, 
+                                 players: newPlayers, 
+                                 log: newLog,
+                                 stepsRemaining: roll // Start moving
+                             };
+                        } else {
+                            newLog.push("No doubles. Stay in Jail.");
+                             return { 
+                                 ...state, 
+                                 dice: [die1, die2], 
+                                 isDiceRolling: false, 
+                                 log: newLog,
+                                 stepsRemaining: 0, // Don't move
+                                 activeModal: { type: 'NOTIFY', data: { title: 'Jail', message: 'You failed to roll doubles. Turn Over.' } }
+                             };
+                        }
+                    }
+
+                    // Normal Start Moving
+                    return {
+                        ...state,
+                        dice: [die1, die2],
+                        isDiceRolling: false,
+                        log: newLog,
+                        stepsRemaining: roll // Set steps to trigger animation loop
+                    };
+                }
+
+                case 'MOVE_STEP': {
+                    // This is triggered repeatedly by the effect until stepsRemaining == 0
+                    if (state.stepsRemaining <= 0) return state;
+
+                    const player = state.players[state.currentPlayerIdx];
+                    if (!player) return state; // Safety check
+
+                    const newPos = (player.position + 1) % 20;
+                    
+                    // Pass GO Check
+                    let money = player.money;
+                    let passedGoMsg = null;
+                    if (newPos === 0) { // Landed on or passed GO
+                        money += 200;
+                        passedGoMsg = `${player.name} passed GO (+$200).`;
+                    }
+
+                    const updatedPlayers = [...state.players];
+                    updatedPlayers[state.currentPlayerIdx] = { 
+                        ...player, 
+                        position: newPos,
+                        money: money 
+                    };
+
+                    let newLog = state.log;
+                    if (passedGoMsg) newLog = [...state.log, passedGoMsg];
+
+                    return {
+                        ...state,
+                        players: updatedPlayers,
+                        stepsRemaining: state.stepsRemaining - 1,
+                        log: newLog
+                    };
+                }
+
+                case 'LAND_ON_TILE': {
+                    // Triggered only when stepsRemaining === 0
+                    const player = state.players[state.currentPlayerIdx];
+                    if (!player) return state; // Safety check
+
+                    const tile = state.board[player.position];
+                    
+                    if (tile.type === TileType.GO_TO_JAIL) {
+                        const jailedPlayers = [...state.players];
+                        jailedPlayers[state.currentPlayerIdx] = { ...player, position: 5, isInJail: true };
+                        return {
+                            ...state,
+                            players: jailedPlayers,
+                            log: [...state.log, `${player.name} went to Jail!`],
+                            activeModal: { type: 'NOTIFY', data: { title: 'Go To Jail', message: 'You have been sent to Jail!' } }
+                        };
+                    }
+
+                    if (tile.type === TileType.PROPERTY) {
+                        if (!tile.owner) {
+                            // Offer to buy
+                            if (player.money >= tile.price) {
+                                return { ...state, activeModal: { type: 'QUIZ', data: { tile } } };
+                            }
+                        } else if (tile.owner !== player.id && !player.isInJail) { // Pay rent
+                             // Check Monopoly
+                            const ownerId = tile.owner;
+                            const groupTiles = state.board.filter(t => t.group === tile.group);
+                            const hasMonopoly = groupTiles.every(t => t.owner === ownerId);
+                            
+                            // Rent Calc: Base * (Level+1) * (Monopoly ? 2 : 1)
+                            const rawRent = tile.rent * (tile.level + 1);
+                            const finalRent = hasMonopoly ? rawRent * 2 : rawRent;
+
+                            return { 
+                                ...state, 
+                                activeModal: { type: 'RENT', data: { tile, amount: finalRent, isMonopoly: hasMonopoly } } 
+                            };
+                        }
+                    } else if (tile.type === TileType.TAX) {
+                        const taxedPlayers = [...state.players];
+                        taxedPlayers[state.currentPlayerIdx].money -= tile.price;
+                        return {
+                            ...state,
+                            players: taxedPlayers,
+                            log: [...state.log, `${player.name} paid $${tile.price} tax.`],
+                            activeModal: { type: 'NOTIFY', data: { title: 'Tax', message: `You paid $${tile.price} in taxes.` } }
+                        };
+                    } else if (tile.type === TileType.CHANCE) {
+                         const gain = Math.random() > 0.5;
+                         const amount = 50;
+                         const chancePlayers = [...state.players];
+                         if (gain) chancePlayers[state.currentPlayerIdx].money += amount;
+                         else chancePlayers[state.currentPlayerIdx].money -= amount;
+                         
+                         const msg = gain ? `Bank error in your favor! +$${amount}` : `Speeding fine! -$${amount}`;
+                         return {
+                            ...state,
+                            players: chancePlayers,
+                            activeModal: { type: 'NOTIFY', data: { title: 'Chance', message: msg } }
+                         };
+                    }
+
+                    // For Start, Jail(visiting), Parking - nothing happens immediately, user ends turn manually or auto?
+                    if ([TileType.START, TileType.JAIL, TileType.PARKING].includes(tile.type)) {
+                         return { ...state, activeModal: null }; 
+                    }
+
+                    return state;
+                }
+
+                case 'PAY_BAIL': {
+                    const player = state.players[state.currentPlayerIdx];
+                    if (player.money < 50) return state; // Should be disabled in UI
+                    const newPlayers = [...state.players];
+                    newPlayers[state.currentPlayerIdx] = { ...player, money: player.money - 50, isInJail: false };
+                    return {
+                        ...state,
+                        players: newPlayers,
+                        log: [...state.log, `${player.name} paid $50 bail.`],
+                    };
+                }
+
+                case 'BUY_PROPERTY': {
+                    const { tile } = action.payload;
+                    const player = state.players[state.currentPlayerIdx];
+                    const newPlayers = [...state.players];
+                    newPlayers[state.currentPlayerIdx].money -= tile.price;
+                    
+                    const newBoard = [...state.board];
+                    newBoard[tile.id] = { ...tile, owner: player.id, ownerColor: player.color }; // ownerColor for UI
+                    
+                    return {
+                        ...state,
+                        players: newPlayers,
+                        board: newBoard,
+                        activeModal: { type: 'NOTIFY', data: { title: 'Purchased!', message: `You bought ${tile.name}!` } },
+                        log: [...state.log, `${player.name} bought ${tile.name}.`]
+                    };
+                }
+
+                case 'PAY_RENT': {
+                    const { amount, tile } = action.payload;
+                    const currentPlayer = state.players[state.currentPlayerIdx];
+                    const ownerIdx = state.players.findIndex(p => p.id === tile.owner);
+                    
+                    const newPlayers = [...state.players];
+                    newPlayers[state.currentPlayerIdx].money -= amount;
+                    newPlayers[ownerIdx].money += amount;
+                    
+                    return {
+                        ...state,
+                        players: newPlayers,
+                        activeModal: null,
+                        log: [...state.log, `${currentPlayer.name} paid $${amount} rent to ${newPlayers[ownerIdx].name}.`]
+                    };
+                }
+
+                case 'UPGRADE_TILE': {
+                    const { tile } = action.payload;
+                    const player = state.players.find(p => p.id === tile.owner);
+                    const cost = Math.floor(tile.price * 0.5);
+                    
+                    if (player.money < cost || tile.level >= 4) return state;
+
+                    const pIdx = state.players.findIndex(p => p.id === player.id);
+                    const newPlayers = [...state.players];
+                    newPlayers[pIdx].money -= cost;
+
+                    const newBoard = [...state.board];
+                    newBoard[tile.id] = { ...tile, level: tile.level + 1 };
+
+                    return {
+                        ...state,
+                        players: newPlayers,
+                        board: newBoard,
+                        activeModal: { type: 'NOTIFY', data: { title: 'Upgraded!', message: `Built a house on ${tile.name}.` } },
+                        log: [...state.log, `${player.name} upgraded ${tile.name}.`]
+                    }
+                }
+
+                case 'NEXT_TURN': {
+                    const nextIdx = (state.currentPlayerIdx + 1) % state.players.length;
+                    return {
+                        ...state,
+                        currentPlayerIdx: nextIdx,
+                        activeModal: null,
+                        dice: [1, 1],
+                        stepsRemaining: 0 // Safety reset
+                    };
+                }
+                
+                case 'CLOSE_MODAL':
+                    return { ...state, activeModal: null };
+
+                case 'OPEN_INSPECT':
+                    return { ...state, activeModal: { type: 'INSPECT', data: { tile: action.payload } } };
+
+                default: return state;
+            }
+        }
+
+        // --- 3. COMPONENTS ---
+
+        function SetupScreen({ onStart }) {
+            const [count, setCount] = useState(2);
+            const [names, setNames] = useState(['Player 1', 'Player 2']);
+
+            const updateCount = (n) => {
+                setCount(n);
+                setNames(Array(n).fill('').map((_, i) => `Player ${i + 1}`));
+            };
+
+            const updateName = (i, val) => {
+                const newNames = [...names];
+                newNames[i] = val;
+                setNames(newNames);
+            };
+
+            const handleStart = () => {
+                const players = names.map((name, i) => ({
+                    id: AVATARS[i].id,
+                    name,
+                    color: AVATARS[i].color,
+                    money: 1000,
+                    position: 0,
+                    isInJail: false
+                }));
+                onStart(players);
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4">
+                    <div className="glass-panel p-8 rounded-3xl max-w-md w-full text-center">
+                        <h1 className="text-4xl font-extrabold text-emerald-600 mb-2">EcoPoly</h1>
+                        <p className="text-slate-500 mb-8">SDG Edition • Local Multiplayer</p>
+                        
+                        <div className="mb-6">
+                            <label className="block text-left text-sm font-bold text-slate-600 mb-2">Number of Players</label>
+                            <div className="flex gap-2 justify-center">
+                                {[2, 3, 4].map(n => (
+                                    <button key={n} onClick={() => updateCount(n)}
+                                        className={`w-12 h-12 rounded-xl font-bold transition-all ${count === n ? 'bg-emerald-500 text-white shadow-lg scale-110' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}>
+                                        {n}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 mb-8">
+                            {names.map((name, i) => (
+                                <div key={i} className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full ${AVATARS[i].color} flex items-center justify-center text-white text-xs font-bold shadow`}>
+                                        {AVATARS[i].id.toUpperCase()}
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        value={name}
+                                        onChange={(e) => updateName(i, e.target.value)}
+                                        className="flex-1 bg-white/50 border border-slate-300 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={handleStart} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-600/30 transition-all active:scale-95">
+                            Start Game
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // SVG Icons
+        const HouseIcon = () => (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white drop-shadow-md">
+                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+            </svg>
+        );
+
+        function Tile({ data, players, onClick }) {
+            const isCorner = [0, 5, 10, 15].includes(data.id);
+            
+            let gridArea = {};
+            if (data.id >= 0 && data.id <= 5) {
+                gridArea = { gridColumnStart: 6 - data.id, gridRowStart: 6 };
+            } else if (data.id >= 6 && data.id <= 10) {
+                gridArea = { gridColumnStart: 1, gridRowStart: 11 - data.id };
+            } else if (data.id >= 11 && data.id <= 15) {
+                gridArea = { gridColumnStart: data.id - 10, gridRowStart: 1 };
+            } else {
+                gridArea = { gridColumnStart: 6, gridRowStart: data.id - 14 };
+            }
+
+            const groupColor = data.group ? PROPERTY_COLORS[data.group] : null;
+            
+            let flexDir = 'flex-col';
+            let barClass = 'h-1/5 w-full';
+            if (data.id >= 0 && data.id <= 5) flexDir = 'flex-col-reverse'; 
+            else if (data.id >= 6 && data.id <= 10) { flexDir = 'flex-row'; barClass = 'w-1/5 h-full'; } 
+            else if (data.id >= 11 && data.id <= 15) flexDir = 'flex-col'; 
+            else { flexDir = 'flex-row-reverse'; barClass = 'w-1/5 h-full'; }
+
+            if (isCorner) flexDir = 'flex-col justify-center items-center';
+
+            const ownedBy = players.find(p => p.id === data.owner);
+            
+            const borderStyle = ownedBy 
+                ? `ring-4 ring-inset ${ownedBy.color.replace('bg-', 'ring-')} z-10` 
+                : 'border border-slate-300';
+
+            return (
+                <div 
+                    onClick={() => onClick(data)}
+                    style={gridArea}
+                    className={`relative bg-white/90 backdrop-blur-sm shadow-sm flex ${flexDir} overflow-hidden transition-all tile-hover cursor-pointer ${borderStyle} ${isCorner ? 'bg-slate-100' : ''}`}
+                >
+                    {!isCorner && groupColor && (
+                        <div style={{ backgroundColor: groupColor }} className={`${barClass} relative`}>
+                            {data.level > 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center gap-0.5">
+                                    {Array(data.level).fill(0).map((_, i) => <HouseIcon key={i} />)}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex-1 flex flex-col items-center justify-center p-1 text-center w-full">
+                        <div className="flex items-center justify-center gap-1 w-full">
+                            {ownedBy && (
+                                <div className={`w-4 h-4 rounded-full ${ownedBy.color} text-[8px] text-white flex items-center justify-center font-bold shadow-sm shrink-0`}>
+                                    {ownedBy.name.charAt(0)}
+                                </div>
+                            )}
+                            <span className="text-[1.2vmin] font-bold leading-tight truncate w-full">{data.name}</span>
+                        </div>
+                        
+                        {!isCorner && data.price && <span className="text-[1vmin] text-slate-500">${data.price}</span>}
+                        {isCorner && <span className="text-[1vmin] text-slate-400 mt-1">{data.description}</span>}
+                    </div>
+                </div>
+            );
+        }
+
+        // ... [Modal, ModalManager, HouseIcon components stay the same] ...
+        // Re-declaring generic Modal components for completeness in this single file context
+        function Modal({ children, headerClass = 'bg-slate-100', onClose }) {
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden modal-enter" onClick={e => e.stopPropagation()}>
+                        <div className={`p-4 ${headerClass}`}></div>
+                        <div className="p-6">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ModalManager({ activeModal, dispatch, players, board }) {
+            if (!activeModal) return null;
+            const { type, data } = activeModal;
+
+            const handleClose = () => {
+                if (['NOTIFY', 'INSPECT'].includes(type)) {
+                    dispatch({ type: 'CLOSE_MODAL' });
+                    if (type === 'NOTIFY' && !data.noTurnEnd) { 
+                       dispatch({ type: 'NEXT_TURN' }); 
+                    }
+                }
+            };
+
+            if (type === 'NOTIFY') {
+                return (
+                    <Modal onClose={handleClose}>
+                        <h3 className="text-xl font-bold text-center mb-2">{data.title}</h3>
+                        <p className="text-center text-slate-600 mb-6">{data.message}</p>
+                        <button onClick={handleClose} className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold">OK</button>
+                    </Modal>
+                );
+            }
+
+            if (type === 'QUIZ') {
+                const question = SDG_QUESTIONS[Math.floor(Math.random() * SDG_QUESTIONS.length)];
+                
+                const answer = (idx) => {
+                    if (idx === question.c) {
+                        dispatch({ type: 'BUY_PROPERTY', payload: { tile: data.tile } });
+                    } else {
+                        dispatch({ type: 'NOTIFY', payload: { title: 'Wrong Answer', message: 'You missed the chance to buy this property.' } });
+                        dispatch({ type: 'CLOSE_MODAL' });
+                        dispatch({ type: 'NEXT_TURN' });
+                    }
+                };
+
+                return (
+                    <Modal headerClass="bg-brand-green">
+                        <h3 className="text-center font-bold text-emerald-700 mb-1">Eco Quiz</h3>
+                        <p className="text-center text-sm text-emerald-600 mb-4">Answer to buy {data.tile.name}</p>
+                        <p className="font-bold text-lg mb-6 text-center">{question.q}</p>
+                        <div className="space-y-2">
+                            {question.a.map((ans, i) => (
+                                <button key={i} onClick={() => answer(i)} className="w-full p-3 text-left border rounded-lg hover:bg-emerald-5 transition-colors">
+                                    {ans}
+                                </button>
+                            ))}
+                        </div>
+                    </Modal>
+                );
+            }
+
+            if (type === 'RENT') {
+                const owner = players.find(p => p.id === data.tile.owner);
+                return (
+                    <Modal headerClass={data.tile.group ? `bg-[${PROPERTY_COLORS[data.tile.group]}]` : 'bg-red-100'}>
+                         <h3 className="text-xl font-bold text-center mb-2">Pay Rent</h3>
+                         <p className="text-center text-slate-600 mb-2">You landed on {data.tile.name}</p>
+                         <div className="flex justify-center items-center gap-2 mb-6">
+                            <span className="text-2xl font-bold text-slate-800">${data.amount}</span>
+                            <span className="text-slate-400">➔</span>
+                            <div className={`w-6 h-6 rounded-full ${owner.color}`}></div>
+                         </div>
+                         {data.isMonopoly && (
+                             <div className="text-center mb-4">
+                                <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded text-xs font-bold border border-orange-200">MONOPOLY BONUS x2</span>
+                             </div>
+                         )}
+                         <button onClick={() => {
+                             dispatch({ type: 'PAY_RENT', payload: { amount: data.amount, tile: data.tile } });
+                             dispatch({ type: 'NEXT_TURN' });
+                         }} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold">
+                             Pay Now
+                         </button>
+                    </Modal>
+                );
+            }
+
+            if (type === 'INSPECT') {
+                const { tile } = data;
+                const owner = players.find(p => p.id === tile.owner);
+                const isMine = owner && owner.id === players[activeModal.playerId || players[0].id]; 
+                
+                const groupColor = PROPERTY_COLORS[tile.group] || '#cbd5e1';
+                const houseCost = Math.floor(tile.price * 0.5);
+                const nextRent = tile.rent * (tile.level + 2);
+
+                const handleUpgrade = () => {
+                    dispatch({ type: 'UPGRADE_TILE', payload: { tile } });
+                    dispatch({ type: 'CLOSE_MODAL' });
+                };
+
+                return (
+                    <Modal onClose={handleClose} headerClass="p-0">
+                         <div style={{ backgroundColor: groupColor }} className="h-16 w-full flex items-center justify-center">
+                             <h3 className="text-white font-bold text-xl shadow-sm">{tile.name}</h3>
+                         </div>
+                         <div className="mt-4 space-y-4">
+                             <div className="grid grid-cols-3 gap-2 text-center">
+                                 <div className="flex flex-col p-2 bg-slate-50 rounded-lg">
+                                     <span className="text-xs uppercase text-slate-500 font-bold">Base Rent</span>
+                                     <span className="text-lg font-bold text-slate-700">${tile.rent}</span>
+                                 </div>
+                                 <div className="flex flex-col p-2 bg-slate-50 rounded-lg">
+                                     <span className="text-xs uppercase text-slate-500 font-bold">Level</span>
+                                     <span className="text-lg font-bold text-slate-700">{tile.level}/4</span>
+                                 </div>
+                                 <div className="flex flex-col p-2 bg-emerald-50 border border-emerald-100 rounded-lg">
+                                     <span className="text-xs uppercase text-emerald-600 font-bold">House Cost</span>
+                                     <span className="text-lg font-bold text-emerald-700">${houseCost}</span>
+                                 </div>
+                             </div>
+                             <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                                 <span className="text-slate-500 font-medium">Owner</span>
+                                 {owner ? (
+                                     <div className="flex items-center gap-2">
+                                         <span className="font-bold text-slate-700">{owner.name}</span>
+                                         <div className={`w-6 h-6 rounded-full ${owner.color}`}></div>
+                                     </div>
+                                 ) : (
+                                     <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">For Sale (${tile.price})</span>
+                                 )}
+                             </div>
+                             {owner && tile.level < 4 && (
+                                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                     <div className="flex justify-between items-center mb-2">
+                                         <span className="text-sm font-bold text-slate-600">Upgrade Potential</span>
+                                         <span className="text-xs text-brand-green font-bold">Next Rent: ${nextRent}</span>
+                                     </div>
+                                     <button 
+                                        onClick={handleUpgrade}
+                                        className="w-full py-2 bg-brand-green text-white rounded-lg font-bold text-sm hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2">
+                                         <HouseIcon /> Build House (-${houseCost})
+                                     </button>
+                                 </div>
+                             )}
+                         </div>
+                    </Modal>
+                );
+            }
+            return null;
+        }
+
+        function HelpModal({ isOpen, onClose }) {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl modal-enter relative" onClick={e => e.stopPropagation()}>
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                        <h2 className="text-3xl font-extrabold text-emerald-600 mb-4">How to Play</h2>
+                        <div className="space-y-4 text-slate-600 overflow-y-auto max-h-[60vh] pr-2">
+                            <div><h4 className="font-bold text-slate-800">1. Objective</h4><p className="text-sm">Be the last player with money or the one with the most assets!</p></div>
+                            <div><h4 className="font-bold text-slate-800">2. Moving</h4><p className="text-sm">Roll the dice to move around the board. Landing on properties lets you buy them.</p></div>
+                            <div><h4 className="font-bold text-slate-800">3. Buying & Rent</h4><p className="text-sm">Land on an unowned property to buy it (answer a quiz first!). If another player owns it, you pay rent.</p></div>
+                            <div><h4 className="font-bold text-slate-800">4. Upgrades & Monopoly</h4><p className="text-sm">Own all properties of a color to double the rent! Build houses to increase rent further.</p></div>
+                            <div><h4 className="font-bold text-slate-800">5. Jail</h4><p className="text-sm">If you land on "Go To Jail", you're stuck until you pay bail or roll doubles.</p></div>
+                        </div>
+                        <button onClick={onClose} className="mt-6 w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700">Got it!</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [state, dispatch] = useReducer(reducer, initialState);
+            const [showHelp, setShowHelp] = useState(true);
+            const [visualDice, setVisualDice] = useState([1, 1]);
+            const isMovingRef = useRef(false); // Track if movement is active to prevent loop
+
+            // Dice Visual Loop
+            useEffect(() => {
+                let interval;
+                if (state.isDiceRolling) {
+                    interval = setInterval(() => {
+                        setVisualDice([Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]);
+                    }, 80);
+                } else {
+                    setVisualDice(state.dice);
+                }
+                return () => clearInterval(interval);
+            }, [state.isDiceRolling, state.dice]);
+
+            // Movement Animation Loop (Step-by-Step)
+            useEffect(() => {
+                if (state.screen !== 'GAME') return; // CRITICAL FIX: Do not run logic if game hasn't started (prevents crash on mount)
+
+                if (state.stepsRemaining > 0) {
+                    isMovingRef.current = true;
+                    const timer = setTimeout(() => {
+                        dispatch({ type: 'MOVE_STEP' });
+                    }, 300); // 300ms per tile step
+                    return () => clearTimeout(timer);
+                } else if (state.stepsRemaining === 0 && isMovingRef.current) {
+                    // Only trigger Landing IF we were previously moving
+                    isMovingRef.current = false; // Reset flag
+                    
+                    const timer = setTimeout(() => {
+                        dispatch({ type: 'LAND_ON_TILE' });
+                    }, 400); 
+                    return () => clearTimeout(timer);
+                }
+            }, [state.stepsRemaining, state.screen]);
+
+            if (state.screen === 'SETUP') {
+                return <SetupScreen onStart={(players) => dispatch({ type: 'START_GAME', payload: players })} />;
+            }
+
+            // Safety check for currentPlayer
+            const currentPlayer = state.players[state.currentPlayerIdx] || { money: 0, name: '?', color: 'bg-gray-500', isInJail: false };
+
+            const rollDice = () => {
+                if (state.isDiceRolling || state.activeModal || state.stepsRemaining > 0) return;
+                
+                dispatch({ type: 'ROLL_DICE_START' });
+                setTimeout(() => {
+                    const d1 = Math.ceil(Math.random() * 6);
+                    const d2 = Math.ceil(Math.random() * 6);
+                    dispatch({ type: 'ROLL_DICE_COMPLETE', payload: { die1: d1, die2: d2 } });
+                }, 1000);
+            };
+
+            const payBail = () => {
+                dispatch({ type: 'PAY_BAIL' });
+            };
+
+            return (
+                <div className="relative min-h-screen flex items-center justify-center p-2 overflow-hidden">
+                    <div className="absolute inset-0 opacity-30 pattern-dots pointer-events-none"></div>
+
+                    <button onClick={() => setShowHelp(true)} className="fixed top-4 right-4 z-40 w-10 h-10 bg-white/80 backdrop-blur rounded-full shadow-lg flex items-center justify-center font-bold text-emerald-600 hover:scale-110 transition-transform">
+                        ?
+                    </button>
+                    <HelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
+
+                    <div className="relative w-[95vmin] h-[95vmin] max-w-[800px] max-h-[800px]">
+                        
+                        <div className="absolute inset-0 grid grid-cols-6 grid-rows-6 gap-1 p-1 bg-white/40 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50">
+                            
+                            {/* Center Hub */}
+                            <div className="col-start-2 col-end-6 row-start-2 row-end-6 relative flex flex-col items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-white/30 rounded-2xl"></div>
+                                <div className="z-10 text-center mb-4">
+                                    <h1 className="text-4xl font-black text-emerald-600 tracking-tight drop-shadow-sm">EcoPoly</h1>
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Global Goals</span>
+                                </div>
+                                <div className="z-10 w-full h-24 overflow-y-auto mb-4 text-xs space-y-1 text-center scrollbar-hide opacity-80">
+                                    {state.log.slice(-5).reverse().map((l, i) => (
+                                        <div key={i} className="bg-white/60 px-2 py-1 rounded text-slate-600">{l}</div>
+                                    ))}
+                                </div>
+                                <div className="z-10 flex flex-col items-center gap-4">
+                                    <div className={`flex gap-3 transition-transform ${state.isDiceRolling ? 'animate-dice-shake' : ''}`}>
+                                        {visualDice.map((d, i) => (
+                                            <div key={i} className="w-12 h-12 bg-white rounded-xl shadow-lg border border-slate-200 flex items-center justify-center text-2xl font-bold text-slate-800 relative overflow-hidden">
+                                                <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-100"></div>
+                                                <span className="relative z-10">{d}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {currentPlayer.isInJail ? (
+                                        <div className="flex flex-col gap-2 w-40">
+                                            <button 
+                                                onClick={rollDice}
+                                                disabled={state.isDiceRolling}
+                                                className="w-full py-2 bg-indigo-500 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-600 active:scale-95 transition-all disabled:opacity-50">
+                                                Try for Doubles
+                                            </button>
+                                            <button 
+                                                onClick={payBail}
+                                                disabled={currentPlayer.money < 50}
+                                                className="w-full py-2 bg-slate-500 text-white font-bold rounded-lg shadow-lg hover:bg-slate-600 active:scale-95 transition-all disabled:opacity-50">
+                                                Pay Bail ($50)
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={rollDice}
+                                            disabled={state.isDiceRolling || state.activeModal || state.stepsRemaining > 0}
+                                            className={`
+                                                group relative px-8 py-3 rounded-2xl font-black text-white shadow-xl
+                                                bg-gradient-to-r from-emerald-500 to-teal-500
+                                                hover:from-emerald-400 hover:to-teal-400
+                                                active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                                            `}>
+                                            <span className="relative z-10 flex items-center gap-2">
+                                                {state.isDiceRolling ? 'ROLLING...' : state.stepsRemaining > 0 ? 'MOVING...' : 'ROLL DICE'}
+                                            </span>
+                                            <div className="absolute inset-0 rounded-2xl bg-white/20 blur-md group-hover:blur-lg transition-all opacity-0 group-hover:opacity-100"></div>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Render Tiles */}
+                            {state.board.map(tile => (
+                                <Tile 
+                                    key={tile.id} 
+                                    data={tile} 
+                                    players={state.players} 
+                                    onClick={(t) => dispatch({ type: 'OPEN_INSPECT', payload: t })} 
+                                />
+                            ))}
+
+                            {/* PLAYER TOKENS LAYER - For Smooth Sliding */}
+                            {/* We use an absolute overlay to position players freely */}
+                            <div className="absolute inset-0 pointer-events-none">
+                                {state.players.map((p, i) => {
+                                    if (!p) return null; // Defensive check
+                                    const coords = getTileCoordinates(p.position || 0);
+                                    // Offset slightly if multiple players are on the same tile? 
+                                    // Simple logic: no offset, they stack. Or small random offset.
+                                    // Let's add a small offset based on player index to see them all.
+                                    
+                                    return (
+                                        <div 
+                                            key={p.id || i}
+                                            className={`absolute w-[6vmin] h-[6vmin] flex items-center justify-center transition-all duration-300 ease-in-out z-50`}
+                                            style={{
+                                                top: `calc(${coords.top}% + 1%)`,
+                                                left: `calc(${coords.left}% + 1%)`,
+                                                width: '15%', // Approx tile size (100/6 = 16.6%)
+                                                height: '15%',
+                                            }}
+                                        >
+                                            <div className={`w-[3vmin] h-[3vmin] rounded-full ${p.color} border-2 border-white shadow-md relative transform hover:scale-125 transition-transform`}>
+                                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-800 bg-white/80 px-1 rounded shadow-sm opacity-0 group-hover:opacity-100">
+                                                    {p.name}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div className="fixed bottom-0 left-0 right-0 p-4 flex justify-center gap-4 pointer-events-none">
+                        {state.players.map((p, i) => (
+                            <div key={p.id || i} className={`
+                                pointer-events-auto
+                                glass-panel px-4 py-2 rounded-2xl flex items-center gap-3 transition-all duration-500
+                                ${state.currentPlayerIdx === i ? 'scale-110 ring-4 ring-emerald-400/50 -translate-y-2' : 'scale-90 opacity-80'}
+                            `}>
+                                <div className={`w-10 h-10 rounded-full ${p.color} border-2 border-white shadow flex items-center justify-center text-white font-bold`}>
+                                    {p.name.charAt(0)}
+                                </div>
+                                <div>
+                                    <div className="font-bold text-slate-800 text-sm flex items-center gap-1">
+                                        {p.name}
+                                        {p.isInJail && <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded border border-red-200">JAIL</span>}
+                                    </div>
+                                    <div className="text-emerald-600 font-black text-lg">${p.money}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <ModalManager 
+                        activeModal={state.activeModal} 
+                        dispatch={dispatch} 
+                        players={state.players}
+                        board={state.board}
+                    />
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
